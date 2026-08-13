@@ -6,6 +6,11 @@
 static float accumulatedX = 0;
 static float accumulatedY = 0;
 
+#ifdef JSM_EMBEDDED_CORE
+extern "C" void jsm_core_record_mouse_event(float x, float y);
+extern "C" void jsm_core_record_key_event();
+#endif
+
 // Windows' mouse speed settings translate non-linearly to speed.
 // Thankfully, the mappings are available here: https://liquipedia.net/counterstrike/Mouse_settings#Windows_Sensitivity
 static float windowsSensitivityMappings[] = {
@@ -58,6 +63,9 @@ unordered_map<WORD, tuple<DWORD, DWORD, DWORD>> mouseMaps = {
 // send mouse button
 int pressMouse(KeyCode vkKey, bool isPressed)
 {
+	#ifdef JSM_EMBEDDED_CORE
+	jsm_core_record_key_event();
+	#endif
 	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-mouseinput
 	auto val = mouseMaps[vkKey.code];
 
@@ -113,6 +121,9 @@ bool isExtendedKey(KeyCode key)
 // send key press
 int pressKey(KeyCode vkKey, bool pressed)
 {
+	#ifdef JSM_EMBEDDED_CORE
+	jsm_core_record_key_event();
+	#endif
 	if (vkKey.code == 0)
 		return 0;
 	if (vkKey.code <= V_WHEEL_DOWN) // Highest mouse ID
@@ -145,6 +156,9 @@ int pressKey(KeyCode vkKey, bool pressed)
 
 void moveMouse(float x, float y)
 {
+	#ifdef JSM_EMBEDDED_CORE
+	jsm_core_record_mouse_event(x, y);
+	#endif
 	accumulatedX += x;
 	accumulatedY += y;
 

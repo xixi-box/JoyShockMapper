@@ -9,6 +9,15 @@ endif()
 
 project (${PROJECT_NAME} CXX)
 
+if(MSVC)
+	# All native libraries are linked into the same executable, so keep the VC
+	# runtime static as well and avoid requiring a separate redistributable.
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
+endif()
+
+set(SDL_SHARED OFF CACHE BOOL "Build SDL as a shared library" FORCE)
+set(SDL_STATIC ON CACHE BOOL "Build SDL as a static library" FORCE)
+
 # Turning off extensions avoids and issue with the clang 16 compiler with modules
 set(CMAKE_CXX_EXTENSIONS OFF)
 set (CMAKE_CXX_STANDARD 23)

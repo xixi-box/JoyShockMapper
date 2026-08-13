@@ -3,7 +3,9 @@
 #include "JSMVariable.hpp"
  #include "TriggerEffectGenerator.h"
 #include "SettingsManager.h"
+#ifndef JSM_EMBEDDED_CORE
 #include "dimgui/Application.h"
+#endif
 #include "SDL3/SDL.h"
 #include <map>
 #include <mutex>
@@ -15,6 +17,94 @@
 #include <iostream>
 #include <cstring>
 #include <span>
+#include <sstream>
+
+#ifdef JSM_EMBEDDED_CORE
+extern "C" void jsm_core_load_device_profile(const char *identity, int split_type);
+extern "C" int jsm_core_simulated_buttons();
+
+static std::mutex embedded_virtual_mutex;
+static SDL_JoystickID embedded_virtual_id = 0;
+static SDL_Joystick *embedded_virtual_joystick = nullptr;
+
+extern "C" __declspec(dllexport) int jsm_core_attach_virtual_controller()
+{
+	std::lock_guard guard(embedded_virtual_mutex);
+	if (embedded_virtual_id != 0)
+		return embedded_virtual_id;
+
+	static const SDL_VirtualJoystickSensorDesc sensors[] = {
+		{ SDL_SENSOR_ACCEL, 120.0f },
+		{ SDL_SENSOR_GYRO, 120.0f },
+	};
+	static const SDL_VirtualJoystickTouchpadDesc touchpads[] = {
+		{ 2, { 0, 0, 0 } },
+	};
+	SDL_VirtualJoystickDesc desc;
+	SDL_INIT_INTERFACE(&desc);
+	desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+	desc.vendor_id = 0x057e;
+	desc.product_id = 0x2009;
+	desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
+	desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+	desc.ntouchpads = Uint16(std::size(touchpads));
+	desc.touchpads = touchpads;
+	desc.nsensors = Uint16(std::size(sensors));
+	desc.sensors = sensors;
+	desc.name = "JoyShockMapper Virtual Switch Controller";
+	embedded_virtual_id = SDL_AttachVirtualJoystick(&desc);
+	if (embedded_virtual_id == 0)
+		return 0;
+	embedded_virtual_joystick = SDL_OpenJoystick(embedded_virtual_id);
+	if (!embedded_virtual_joystick)
+	{
+		SDL_DetachVirtualJoystick(embedded_virtual_id);
+		embedded_virtual_id = 0;
+		return 0;
+	}
+	return embedded_virtual_id;
+}
+
+extern "C" __declspec(dllexport) bool jsm_core_set_virtual_button(int button, bool down)
+{
+	std::lock_guard guard(embedded_virtual_mutex);
+	return embedded_virtual_joystick && SDL_SetJoystickVirtualButton(embedded_virtual_joystick, button, down);
+}
+
+extern "C" __declspec(dllexport) bool jsm_core_set_virtual_motion(
+	float gyro_x_dps, float gyro_y_dps, float gyro_z_dps,
+	float accel_x_g, float accel_y_g, float accel_z_g)
+{
+	std::lock_guard guard(embedded_virtual_mutex);
+	if (!embedded_virtual_joystick)
+		return false;
+	static constexpr float degreesToRadians = float(M_PI / 180.0);
+	static constexpr float gsToMetersPerSecondSquared = 9.8f;
+	const float gyro[] = {
+		gyro_x_dps * degreesToRadians,
+		gyro_y_dps * degreesToRadians,
+		gyro_z_dps * degreesToRadians,
+	};
+	const float accel[] = {
+		accel_x_g * gsToMetersPerSecondSquared,
+		accel_y_g * gsToMetersPerSecondSquared,
+		accel_z_g * gsToMetersPerSecondSquared,
+	};
+	return SDL_SendJoystickVirtualSensorData(embedded_virtual_joystick, SDL_SENSOR_GYRO, 0, gyro, 3)
+		&& SDL_SendJoystickVirtualSensorData(embedded_virtual_joystick, SDL_SENSOR_ACCEL, 0, accel, 3);
+}
+
+static void detachEmbeddedVirtualController()
+{
+	std::lock_guard guard(embedded_virtual_mutex);
+	if (embedded_virtual_joystick)
+		SDL_CloseJoystick(embedded_virtual_joystick);
+	embedded_virtual_joystick = nullptr;
+	if (embedded_virtual_id != 0)
+		SDL_DetachVirtualJoystick(embedded_virtual_id);
+	embedded_virtual_id = 0;
+}
+#endif
 
 typedef struct
 {
@@ -236,7 +326,9 @@ struct SdlInstance : public JslWrapper
 {
 public:
 	SdlInstance()
+	#ifndef JSM_EMBEDDED_CORE
 	  : _gui(this)
+	#endif
 	{
 		SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 		SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
@@ -251,18 +343,27 @@ public:
 		SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH_HOME_LED, "0");
 		SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
 		SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
+	#ifdef JSM_EMBEDDED_CORE
+		SDL_Init(SDL_INIT_GAMEPAD);
+	#else
 		SDL_Init(SDL_INIT_GAMEPAD | SDL_INIT_VIDEO);
+	#endif
 	}
 
 	virtual ~SdlInstance()
 	{
 		SDL_WaitThread(controller_polling_thread, nullptr);
+	#ifdef JSM_EMBEDDED_CORE
+		detachEmbeddedVirtualController();
+	#endif
 		SDL_Quit();
 	}
 
 	int pollDevices()
 	{
+	#ifndef JSM_EMBEDDED_CORE
 		_gui.init();
+	#endif
 		while (keep_polling)
 		{
 			auto tick_time = SettingsManager::get<float>(SettingID::TICK_TIME)->value();
@@ -270,10 +371,10 @@ public:
 
 			lock_guard guard(controller_lock);
 			SDL_UpdateGamepads();
-			if (_controllerMap.empty())
-			{
-				_gui.draw(nullptr);
-			}
+		#ifndef JSM_EMBEDDED_CORE
+			vector<SDL_Gamepad*> connectedControllers;
+			connectedControllers.reserve(_controllerMap.size());
+		#endif
 			for (auto iter = _controllerMap.begin(); iter != _controllerMap.end(); ++iter)
 			{
 				if (g_callback)
@@ -292,10 +393,17 @@ public:
 				}
 				// Perform rumble
 				SDL_RumbleGamepad(iter->second->_sdlController, iter->second->_big_rumble, iter->second->_small_rumble, Uint32(tick_time + 5));
-				_gui.draw(iter->second->_sdlController);
+			#ifndef JSM_EMBEDDED_CORE
+				connectedControllers.push_back(iter->second->_sdlController);
+			#endif
 			}
+		#ifndef JSM_EMBEDDED_CORE
+			_gui.draw(connectedControllers);
+		#endif
 		}
+	#ifndef JSM_EMBEDDED_CORE
 		_gui.cleanUp();
+	#endif
 		return 1;
 	}
 
@@ -305,7 +413,9 @@ public:
 	void (*g_touch_callback)(int, TOUCH_STATE, TOUCH_STATE, float) = nullptr;
 	atomic_bool keep_polling = false;
 	mutex controller_lock;
+	#ifndef JSM_EMBEDDED_CORE
 	Application _gui;
+	#endif
 	SDL_Thread *controller_polling_thread = nullptr;
 
 	int ConnectDevices() override
@@ -353,6 +463,19 @@ public:
 			{
 				deviceHandleArray[i] = i + 1;
 				_controllerMap[deviceHandleArray[i]] = device;
+			#ifdef JSM_EMBEDDED_CORE
+				SDL_GamepadType type = SDL_GetRealGamepadType(device->_sdlController);
+				if (type == SDL_GAMEPAD_TYPE_UNKNOWN)
+					type = SDL_GetGamepadType(device->_sdlController);
+				std::stringstream identity;
+				identity << magic_enum::enum_name(type) << '|' << SDL_GetGamepadVendor(device->_sdlController)
+				         << '|' << SDL_GetGamepadProduct(device->_sdlController) << '|';
+				if (const char *serial = SDL_GetGamepadSerial(device->_sdlController); serial && *serial)
+					identity << serial;
+				else if (const char *name = SDL_GetGamepadName(device->_sdlController); name)
+					identity << name;
+				jsm_core_load_device_profile(identity.str().c_str(), device->_split_type);
+			#endif
 			}
 			else
 			{
@@ -515,6 +638,9 @@ public:
 			buttons |= SDL_GetGamepadButton(_controllerMap[deviceId]->_sdlController, SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1) ? 1 << JSOFFSET_FNR : 0;
 			break;
 		}
+	#ifdef JSM_EMBEDDED_CORE
+		buttons |= jsm_core_simulated_buttons();
+	#endif
 		return buttons;
 	}
 

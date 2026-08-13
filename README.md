@@ -1,4 +1,63 @@
-# JoyShockMapper
+# JoyShockMapper GUI
+
+> A community GUI edition based on [Electronicks/JoyShockMapper](https://github.com/Electronicks/JoyShockMapper). The controller mapping engine and text configuration format remain compatible with the upstream project.
+
+基于 JoyShockMapper 的社区图形界面版本。保留原有控制器映射核心、命令系统和文本配置格式，在此基础上提供更现代、易用的桌面操作界面。
+
+## Desktop GUI / 桌面界面
+
+The desktop interface uses a focused dark controller-dashboard style inspired by JoyHarness. The home screen presents a controller diagram, callout lines and the action currently assigned to each major button. Simplified Chinese is the default interface language; English and Chinese can be switched instantly from the top-right corner without restarting the application.
+
+新版桌面界面改为借鉴 JoyHarness 的深色手柄控制台：首页直接展示手柄示意图、键位连线与当前映射。默认使用简体中文，右上角可即时切换 English / 中文，无需重启软件。配置命令、键盘按键名和控制器协议名称保留原始英文标识，避免影响配置兼容性。
+
+Current GUI highlights / 当前界面特性：
+
+- JoyHarness-inspired task navigation with a focused home screen / 借鉴 JoyHarness 的任务式导航与精简首页
+- List-based editing for commonly used controller buttons / 常用手柄按键采用直观的列表式编辑
+- Separate single-press and double-press mappings / 单击与双击动作可分别映射
+- Single-key and multi-key shortcut output / 支持映射单键和多键组合快捷键
+- Understandable gyro enable, sensitivity, output and calibration controls / 易懂的陀螺仪开关、灵敏度、输出方式与校准
+- Automatic per-device mapping restore using controller identity / 根据控制器身份自动保存并恢复映射
+- English and Simplified Chinese interface / 中英文界面即时切换
+- Live controller, AutoLoad, and virtual-output status / 控制器、自动加载和虚拟输出状态展示
+- Existing `OnStartup.txt`, `OnReset.txt`, `GyroConfigs`, and `AutoLoad` workflows remain available / 兼容现有文本配置工作流
+
+### Runtime architecture / 运行架构
+
+The distributable is a single Tauri/Rust executable. The existing JoyShockMapper C++ engine is compiled as a static library and linked into that executable, so controller polling, mapping, AutoLoad and mature gyro behavior run in-process without starting a second backend program.
+
+最终成品是单个 Tauri/Rust EXE。原 JoyShockMapper 的 C++ 核心会编译为静态库并链接进同一进程，因此手柄轮询、按键映射、AutoLoad 和成熟的陀螺仪逻辑都在软件内部运行，不会额外启动后端程序。
+
+### Build the portable GUI / 编译单文件便携版
+
+Windows x64 with Visual Studio 2022 C++、CMake、Ninja、Node.js and Rust:
+
+```powershell
+.\rust\build-portable.ps1
+```
+
+The resulting file is `out/portable/JoyShockMapper.exe`.
+
+生成的成品位于 `out/portable/JoyShockMapper.exe`，用户只需启动这一个文件。
+
+The Windows build statically links the C++ engine, SDL3 and ViGEm client library. WebView2 is a Windows runtime component; ViGEm Bus is still required only when Xbox/DS4 virtual-controller output is enabled because it is a system driver rather than an application DLL.
+
+Windows 版本静态链接 C++ 核心、SDL3 和 ViGEm 客户端库，因此无需旁置应用 DLL。WebView2 属于 Windows 运行时组件；只有启用 Xbox/DS4 虚拟手柄输出时才需要安装 ViGEm Bus 系统驱动，它无法作为普通应用 DLL 内嵌。
+
+Device mapping profiles are stored under `%LOCALAPPDATA%\JoyShockMapper\devices`. A controller serial number is used when SDL can provide one; otherwise Joy-Con profiles are shared by model and left/right side. The profile files are user data, not runtime dependencies, so distribution remains a single executable.
+
+设备映射自动保存在 `%LOCALAPPDATA%\JoyShockMapper\devices`。SDL 能提供序列号时会据此区分设备；没有序列号时，同型号 Joy-Con 按左、右侧分别共享配置。这些文件属于用户数据而非运行依赖，因此软件仍以单个 EXE 分发。
+
+左侧“设置”页提供“最小化到系统托盘”和“开机自动启动”。托盘模式下映射与陀螺仪会继续在后台运行，单击托盘图标即可恢复窗口；开机启动使用当前 Windows 用户的启动项，不需要管理员权限。
+
+基础陀螺仪采用“按住启用”逻辑，默认按住 `ZL` 才会将手柄转动转换为鼠标移动，也可以在陀螺仪页面改成其他常用按键。实时映射、SDL 设备轮询和成熟陀螺仪行为由同进程内静态链接的 C++ 核心负责；Rust 负责界面、设置、托盘与持久化。
+
+For stable upstream releases and the complete command reference, continue with the original documentation below. GUI work is maintained in the community fork: [xixi-box/JoyShockMapper](https://github.com/xixi-box/JoyShockMapper).
+
+---
+
+## Original JoyShockMapper documentation
+
 The Sony PlayStation DualSense, DualShock 4, Nintendo Switch JoyCons (used in pairs), and Nintendo Switch Pro Controller have much in common. They have many of the features expected of modern game controllers. They also have an incredibly versatile and underutilised input that their biggest rival (Microsoft's Xbox One controller) doesn't have: a 3-axis gyroscope (from here on, “gyro”).
 
 My goal with JoyShockMapper is to enable you to play PC games with DS, DS4, JoyCons, and Pro Controllers even better than you can on their respective consoles -- and demonstrate that more games should use these features in these ways.

@@ -25,7 +25,10 @@ add_executable (
 	src/Mapping.cpp
     src/TriggerEffectGenerator.cpp
     src/AutoLoad.cpp
+	src/AutoConnect.cpp
 	src/SettingsManager.cpp
+	src/Stick.cpp
+	src/JoyShock.cpp
     include/TriggerEffectGenerator.h
     include/InputHelpers.h
     include/PlatformDefinitions.h
@@ -102,15 +105,7 @@ if (WINDOWS)
         "${ViGEmClient_SOURCE_DIR}/include"
     )
 
-    if(SDL)
-        add_custom_command(
-            TARGET ${BINARY_NAME}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-                "$<TARGET_FILE:SDL3-shared>"
-                "$<TARGET_FILE_DIR:${BINARY_NAME}>/$<TARGET_FILE_NAME:SDL3-shared>"
-        )
-    else()
+	if(NOT SDL)
 		add_custom_command(
 			TARGET ${BINARY_NAME}
 			POST_BUILD
@@ -128,7 +123,10 @@ if (WINDOWS)
 		 VS_DEBUGGER_COMMAND_ARGUMENTS "$(SolutionDir)../dist"
     )
 
-	 add_definitions(/bigobj)
+	target_compile_options(${BINARY_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj>)
+	if (MSVC)
+		target_compile_options(${BINARY_NAME} PRIVATE /utf-8)
+	endif()
 endif ()
 
 if (LINUX)
@@ -165,7 +163,7 @@ target_compile_definitions (
 target_include_directories (
     ${BINARY_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${PROJECT_BINARY_DIR}/${PROJECT_NAME}/include"
+    "${CMAKE_CURRENT_BINARY_DIR}/include"
 )
 
 if(SDL OR NOT DEFINED SDL)
@@ -188,8 +186,6 @@ if(SDL OR NOT DEFINED SDL)
 	#	GIT_TAG release-2.6.2
 	#)
 	
-	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
     # Dear ImGUI
     CPMAddPackage (
         NAME imgui
@@ -198,17 +194,16 @@ if(SDL OR NOT DEFINED SDL)
     )
 
 	set_target_properties(SDL_uclibc PROPERTIES FOLDER "SDL")
-    set_target_properties(SDL3-shared PROPERTIES FOLDER "SDL")
-	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+	set_target_properties(SDL3-static PROPERTIES FOLDER "SDL")
 
     target_link_libraries (
         ${BINARY_NAME} PRIVATE
         Platform::Dependencies
-        SDL3::SDL3-shared
+		SDL3::SDL3-static
     )
     
     install (
-       TARGETS ${BINARY_NAME} SDL3-shared
+		TARGETS ${BINARY_NAME}
         RUNTIME DESTINATION ${PACKAGE_DIR}
 
     )
@@ -233,7 +228,7 @@ if(SDL OR NOT DEFINED SDL)
     )
 
     target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR})
-    target_link_libraries(imgui PUBLIC SDL3::SDL3-shared)
+	target_link_libraries(imgui PUBLIC SDL3::SDL3-static)
 
     target_link_libraries(${BINARY_NAME} PUBLIC imgui)
 
@@ -302,37 +297,26 @@ target_link_libraries (
     GamepadMotionHelpers
 )
 
-# Dear ImGUI
-CPMAddPackage (
-    NAME imgui
-    GITHUB_REPOSITORY ocornut/imgui
-    GIT_TAG docking
-)
-
-add_library(imgui STATIC
-  ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui.h
-  ${imgui_SOURCE_DIR}/imconfig.h ${imgui_SOURCE_DIR}/imgui_demo.cpp
-  ${imgui_SOURCE_DIR}/imgui_draw.cpp ${imgui_SOURCE_DIR}/imgui_internal.h
-  ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/imstb_rectpack.h ${imgui_SOURCE_DIR}/imstb_textedit.h
-  ${imgui_SOURCE_DIR}/imstb_truetype.h
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.h ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer.h ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer.cpp)
-
-target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-target_link_libraries(imgui PUBLIC SDL2::SDL2)
-
-target_link_libraries(${BINARY_NAME} PUBLIC imgui)
-
-target_include_directories(${BINARY_NAME} PUBLIC ${PROJECT_BINARY_DIR}/_deps/imgui-src
-                                                 ${PROJECT_BINARY_DIR}/_deps/imgui-src/backends)
-
-add_custom_command(
-	TARGET ${BINARY_NAME}
-	POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy
-	"${PROJECT_SOURCE_DIR}/dist/ds4.bmp"
-	"$<TARGET_FILE_DIR:${PROJECT_NAME}>/ds4.bmp"
-)
-
-# FetchContent_MakeAvailable(imgui)
+if (WIN32 AND (SDL OR NOT DEFINED SDL))
+    add_library(jsm_embedded_core STATIC
+        src/main.cpp src/operators.cpp src/CmdRegistry.cpp src/quatMaths.cpp
+        src/ButtonHelp.cpp src/DigitalButton.cpp src/MotionImpl.cpp src/Mapping.cpp
+        src/TriggerEffectGenerator.cpp src/AutoLoad.cpp src/AutoConnect.cpp
+        src/SettingsManager.cpp src/Stick.cpp src/JoyShock.cpp src/SDLWrapper.cpp
+        src/win32/InputHelpers.cpp src/win32/PlatformDefinitions.cpp
+        src/win32/WindowsTrayIcon.cpp src/win32/Gamepad.cpp src/win32/HidHideApi.cpp
+        src/win32/HidHideWhitelister.cpp
+    )
+    target_compile_definitions(jsm_embedded_core PRIVATE
+        JSM_EMBEDDED_CORE SDL APPLICATION_NAME="JoyShockMapper" APPLICATION_RDN="com.github."
+    )
+    target_compile_options(jsm_embedded_core PRIVATE /bigobj /utf-8)
+    target_include_directories(jsm_embedded_core PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_BINARY_DIR}/include"
+        "${ViGEmClient_SOURCE_DIR}/include"
+    )
+    target_link_libraries(jsm_embedded_core PUBLIC
+        Platform::Dependencies SDL3::SDL3-static ViGEmClient magic_enum pocket_fsm GamepadMotionHelpers
+    )
+endif()

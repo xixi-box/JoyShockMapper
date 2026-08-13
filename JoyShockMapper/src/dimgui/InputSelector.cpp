@@ -1,4 +1,5 @@
 #include "dimgui/InputSelector.h"
+#include "dimgui/Localization.h"
 #include "imgui.h"
 #include "JSMVariable.hpp"
 #include "SettingsManager.h"
@@ -12,35 +13,29 @@ using namespace magic_enum;
 enum InputSelector::MappingTabItem::Header InputSelector::MappingTabItem::_activeHeader = InputSelector::MappingTabItem::Header::MODIFIERS;
 
 static array<const char*, enum_integer(ControllerScheme::INVALID)> ctrlrSchemeNames;
-static constexpr array<const char*, enum_integer(ControllerScheme::INVALID)>& controllerSchemeNames()
+static const array<const char*, enum_integer(ControllerScheme::INVALID)>& controllerSchemeNames()
 {
-	ranges::for_each_n(enum_entries<ControllerScheme>().begin(), ctrlrSchemeNames.size(),
-	  [i = 0](auto& pair) mutable
-	  {
-		  ctrlrSchemeNames[i++] = pair.second.data();
-	  });
+	ctrlrSchemeNames = g_chinese ?
+	  array<const char*, 3>{ Zh(u8"无"), "Xbox", "PlayStation 4" } :
+	  array<const char*, 3>{ "NONE", "XBOX", "DS4" };
 	return ctrlrSchemeNames;
 };
 
 static array<const char*, enum_integer(Mapping::EventModifier::INVALID)> evtModNames;
-static constexpr array<const char*, enum_integer(Mapping::EventModifier::INVALID)>& eventModifierNames()
+static const array<const char*, enum_integer(Mapping::EventModifier::INVALID)>& eventModifierNames()
 {
-	ranges::for_each_n(enum_entries<Mapping::EventModifier>().begin(), evtModNames.size(),
-	  [i = 0](auto& pair) mutable
-	  {
-		  evtModNames[i++] = pair.second.data();
-	  });
+	evtModNames = g_chinese ?
+	  array<const char*, 6>{ Zh(u8"自动"), Zh(u8"按下"), Zh(u8"松开"), Zh(u8"连发"), Zh(u8"轻触"), Zh(u8"长按") } :
+	  array<const char*, 6>{ "Auto", "StartPress", "ReleasePress", "TurboPress", "TapPress", "HoldPress" };
 	return evtModNames;
 };
 
 static array<const char*, enum_integer(Mapping::ActionModifier::INVALID)> actModNames;
-static constexpr array<const char*, enum_integer(Mapping::ActionModifier::INVALID)>& actModifierNames()
+static const array<const char*, enum_integer(Mapping::ActionModifier::INVALID)>& actModifierNames()
 {
-	ranges::for_each_n(enum_entries<Mapping::ActionModifier>().begin(), actModNames.size(),
-	  [i = 0](auto& pair) mutable
-	  {
-		  actModNames[i++] = pair.second.data();
-	  });
+	actModNames = g_chinese ?
+	  array<const char*, 4>{ Zh(u8"无"), Zh(u8"切换"), Zh(u8"立即"), Zh(u8"松开" ) } :
+	  array<const char*, 4>{ "None", "Toggle", "Instant", "Release" };
 	return actModNames;
 }
 
@@ -66,19 +61,25 @@ void drawCombo(string_view name, T& setting)
 	}
 }
 
-void InputSelector::show(JSMVariable<Mapping> *variable, string_view name)
+void InputSelector::show(JSMVariable<Mapping> *variable, string_view name, std::function<void()> afterCommit)
 {
 	_variable = variable;
+	_afterCommit = std::move(afterCommit);
 	_name = name;
 	stringstream ss;
-	ss << "Pick an input for " << name << "##"
-	   << "InputSelector";
-	OpenPopup(ss.str().c_str(), ImGuiPopupFlags_AnyPopup);
+	if (g_chinese)
+		ss << Zh(u8"为 ") << name << Zh(u8" 选择输入");
+	else
+		ss << "Choose input for " << name;
+	ss << "###InputSelector";
+	OpenPopup("###InputSelector", ImGuiPopupFlags_AnyPopup);
 	tabList.clear();
+	_combineKeys = false;
 	auto currentLabel = variable->label();
 	if (!currentLabel.empty())
 	{
-		strncpy(label, currentLabel.data(), std::min(IM_ARRAYSIZE(label), int(currentLabel.size())));
+		strncpy(label, currentLabel.data(), IM_ARRAYSIZE(label) - 1);
+		label[IM_ARRAYSIZE(label) - 1] = '\0';
 	}
 	else
 	{
@@ -87,6 +88,7 @@ void InputSelector::show(JSMVariable<Mapping> *variable, string_view name)
 	static constexpr string_view rgx = R"(\s*([!\^]?)((\".*?\")|\w*[0-9A-Z]|\W)([\\\/+'_]?)\s*(.*))";
 	smatch results;
 	string command(variable->value().command());
+	bool allStartPress = true;
 	while (regex_match(command, results, regex(rgx.data())) && !results[0].str().empty())
 	{
 		Mapping::ActionModifier actMod =
@@ -107,23 +109,31 @@ void InputSelector::show(JSMVariable<Mapping> *variable, string_view name)
 		                                Mapping::EventModifier::INVALID;
 
 		tabList.emplace_back(key, evtMod, actMod);
+		allStartPress &= evtMod == Mapping::EventModifier::StartPress;
 
 		command = results[5];
 	}
+	_combineKeys = tabList.size() > 1 && allStartPress;
 }
 
 void InputSelector::draw()
 {
 	ImVec2 center = GetMainViewport()->GetCenter();
-	center.x /= 3.f;
-	center.y /= 3.f;
-	SetNextWindowPos(center, ImGuiCond_Appearing);
+	SetNextWindowPos(center, ImGuiCond_Appearing, { 0.5f, 0.5f });
 	SetNextWindowBgAlpha(1.f);
 	stringstream ss;
-	ss << "Pick an input for " << _name << "##"
-	   << "InputSelector";
+	if (g_chinese)
+		ss << Zh(u8"为 ") << _name << Zh(u8" 选择输入");
+	else
+		ss << "Choose input for " << _name;
+	ss << "###InputSelector";
 	if (BeginPopupModal(ss.str().c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
+		TextColored({ 0.20f, 0.75f, 0.95f, 1.f }, "%s", Tr("Choose one key or build a key combination", Zh(u8"选择单个按键，或创建组合键")));
+		Checkbox(Tr("Press all selected keys together###CombineKeys", Zh(u8"组合键：同时按下所有已选按键###CombineKeys")), &_combineKeys);
+		if (_combineKeys)
+			TextDisabled("%s", Tr("Example: CTRL + SHIFT + A. Use + to add every key.", Zh(u8"例如 Ctrl + Shift + A；点击右侧“+”逐个添加按键。")));
+		Separator();
 		Mapping currentMapping;
 
 		size_t count = 0;
@@ -135,7 +145,7 @@ void InputSelector::draw()
 		{
 			for (auto const& map : tabList)
 			{
-				Mapping::EventModifier actualEvt = map.evt();
+				Mapping::EventModifier actualEvt = _combineKeys ? Mapping::EventModifier::StartPress : map.evt();
 				if (actualEvt == Mapping::EventModifier::Auto)
 				{
 					actualEvt = count == 0 ? (tabList.size() == 1 ? Mapping::EventModifier::StartPress : Mapping::EventModifier::TapPress) :
@@ -143,13 +153,14 @@ void InputSelector::draw()
 				}
 
 				currentMapping.AddMapping(map.keyCode(), actualEvt, map.act());
-				currentMapping.AppendToCommand(map.keyCode(), map.evt(), map.act());
+				currentMapping.AppendToCommand(map.keyCode(), _combineKeys ? Mapping::EventModifier::StartPress : map.evt(), map.act());
 				++count;
 			}
 		}
 
-		Text(currentMapping.description().data());
-		InputTextWithHint("label", "What action does this mapping perform?", label, IM_ARRAYSIZE(label));
+		const string description = LocalizeMappingDescription(currentMapping.description());
+		TextUnformatted(description.c_str());
+		InputTextWithHint(Tr("Description###label", Zh(u8"说明###label")), Tr("What action does this mapping perform?", Zh(u8"这个映射会执行什么操作？")), label, IM_ARRAYSIZE(label));
 		if (BeginTabBar("MyTabBar", ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_NoTooltip | ImGuiTabBarFlags_FittingPolicyScroll))
 		{
 			// Demo Trailing Tabs: click the "+" button to add a new tab (in your app you may want to use a font icon instead of the "+")
@@ -190,36 +201,40 @@ void InputSelector::draw()
 		{
 			TableNextRow();
 			TableSetColumnIndex(0);
-			if (Button("Save", { -FLT_MIN, 0.f }))
+			if (Button(Tr("Save", Zh(u8"保存")), { -FLT_MIN, 0.f }))
 			{
 				_variable->set(currentMapping);
 				_variable->updateLabel(label);
+				if (_afterCommit)
+					_afterCommit();
 				_variable = nullptr;
 				CloseCurrentPopup();
 			}
 
 			TableSetColumnIndex(1);
-			if (Button("Clear", { -FLT_MIN, 0.f }))
+			if (Button(Tr("Clear", Zh(u8"清除")), { -FLT_MIN, 0.f }))
 			{
 				_variable->set(Mapping::NO_MAPPING);
 				_variable->updateLabel("");
+				if (_afterCommit)
+					_afterCommit();
 				_variable = nullptr;
 				CloseCurrentPopup();
 			}
 			else if (IsItemHovered())
 			{
-				SetTooltip(_variable->defaultValue().description().data());
+				SetTooltip("%s", LocalizeMappingDescription(_variable->defaultValue().description()).c_str());
 			}
 			TableSetColumnIndex(2);
 
-			if (Button("Cancel", { -FLT_MIN, 0.f }))
+			if (Button(Tr("Cancel", Zh(u8"取消")), { -FLT_MIN, 0.f }))
 			{
 				_variable = nullptr;
 				CloseCurrentPopup();
 			}
 			else if (IsItemHovered())
 			{
-				SetTooltip(_variable->value().description().data());
+				SetTooltip("%s", LocalizeMappingDescription(_variable->value().description()).c_str());
 			}
 			EndTable();
 		}
@@ -266,21 +281,22 @@ InputSelector::MappingTabItem::MappingTabItem(KeyCode keyCode, Mapping::EventMod
 void InputSelector::MappingTabItem::draw()
 {
 	SetNextItemOpen(_activeHeader == MODIFIERS, ImGuiCond_Always);
-	if (CollapsingHeader("Modifiers"))
+	if (CollapsingHeader(Tr("Modifiers", Zh(u8"触发方式"))))
 	{
 		_activeHeader = MODIFIERS;
-		int evt = 0, act = 0;
-		if (ListBox("Event Modifiers", &evt, eventModifierNames().data(), eventModifierNames().size(), eventModifierNames().size()))
+		int evt = static_cast<int>(enum_index(_evt).value_or(0));
+		int act = static_cast<int>(enum_index(_act).value_or(0));
+		if (ListBox(Tr("Press behavior", Zh(u8"按键时机")), &evt, eventModifierNames().data(), eventModifierNames().size(), eventModifierNames().size()))
 		{
 			_evt = *enum_cast<Mapping::EventModifier>(evt);
 		}
-		if (ListBox("Action Modifiers", &act, actModifierNames().data(), actModifierNames().size(), actModifierNames().size()))
+		if (ListBox(Tr("Action behavior", Zh(u8"动作方式")), &act, actModifierNames().data(), actModifierNames().size(), actModifierNames().size()))
 		{
 			_act = *enum_cast<Mapping::ActionModifier>(act);
 		}
 	}
 	SetNextItemOpen(_activeHeader == MOUSE, ImGuiCond_Always);
-	if (CollapsingHeader("Mouse"))
+	if (CollapsingHeader(Tr("Mouse", Zh(u8"鼠标"))))
 	{
 		_activeHeader = MOUSE;
 		static constexpr size_t MS_ROWS = 3;
@@ -302,7 +318,7 @@ void InputSelector::MappingTabItem::draw()
 		drawSelectableGrid<MS_ROWS, MS_COLS>(mouse, sizing);
 	}
 	SetNextItemOpen(_activeHeader == KEYBOARD, ImGuiCond_Always);
-	if (CollapsingHeader("Keyboard"))
+	if (CollapsingHeader(Tr("Keyboard", Zh(u8"键盘"))))
 	{
 		_activeHeader = KEYBOARD;
 		static constexpr size_t KB_ROWS = 6;
@@ -341,7 +357,7 @@ void InputSelector::MappingTabItem::draw()
 		drawSelectableGrid<KB_ROWS, KB_COLS>(keyboard, sizing);
 	}
 	SetNextItemOpen(_activeHeader == MORE_KEYBOARD, ImGuiCond_Always);
-	if (CollapsingHeader("More keyboard"))
+	if (CollapsingHeader(Tr("More keyboard", Zh(u8"更多键盘按键"))))
 	{
 		_activeHeader = MORE_KEYBOARD;
 		static constexpr size_t XKB_ROWS = 5;
@@ -383,11 +399,11 @@ void InputSelector::MappingTabItem::draw()
 		drawSelectableGrid<XKB_ROWS, XKB_COLS>(extra_keyboard, sizing);
 	}
 	SetNextItemOpen(_activeHeader == CONSOLE, ImGuiCond_Always);
-	if (CollapsingHeader("Console Command"))
+	if (CollapsingHeader(Tr("Console Command", Zh(u8"控制台命令"))))
 	{
 		_activeHeader = CONSOLE;
 		static string command(256, '\0');
-		InputText("Command", command.data(), command.size(), ImGuiInputTextFlags_None);
+		InputText(Tr("Command", Zh(u8"命令")), command.data(), command.size(), ImGuiInputTextFlags_None);
 		if (IsItemDeactivatedAfterEdit())
 		{
 			stringstream ss;
@@ -401,7 +417,7 @@ void InputSelector::MappingTabItem::draw()
 		}
 	}		
 	SetNextItemOpen(_activeHeader == GYRO, ImGuiCond_Always);
-	if (CollapsingHeader("Gyro management"))
+	if (CollapsingHeader(Tr("Gyro management", Zh(u8"陀螺仪控制"))))
 	{
 		_activeHeader = GYRO;
 		static constexpr size_t GYRO_ROWS = 3;
@@ -421,21 +437,21 @@ void InputSelector::MappingTabItem::draw()
 		drawSelectableGrid<GYRO_ROWS, GYRO_COLS>(gyro, sizing);
 	}
 	SetNextItemOpen(_activeHeader == CONTROLLER, ImGuiCond_Always);
-	if (CollapsingHeader("Virtual Controller"))
+	if (CollapsingHeader(Tr("Virtual Controller", Zh(u8"虚拟控制器"))))
 	{
 		_activeHeader = CONTROLLER;
 		ControllerScheme vc = SettingsManager::getV<ControllerScheme>(SettingID::VIRTUAL_CONTROLLER)->value();
 		int currentSelection = *enum_index(vc);
 		if (vc == ControllerScheme::NONE)
 		{
-			if (ListBox("VIRTUAL_CONTROLLER", &currentSelection, controllerSchemeNames().data(), controllerSchemeNames().size(), controllerSchemeNames().size()))
+			if (ListBox(Tr("Virtual controller output###VIRTUAL_CONTROLLER", Zh(u8"虚拟控制器输出###VIRTUAL_CONTROLLER")), &currentSelection, controllerSchemeNames().data(), controllerSchemeNames().size(), controllerSchemeNames().size()))
 			{
 				SettingsManager::getV<ControllerScheme>(SettingID::VIRTUAL_CONTROLLER)->set(enum_value<ControllerScheme>(currentSelection));
 			}
 		}
 		else
 		{
-			if (Combo("VIRTUAL_CONTROLLER", &currentSelection, controllerSchemeNames().data(), controllerSchemeNames().size()))
+			if (Combo(Tr("Virtual controller output###VIRTUAL_CONTROLLER", Zh(u8"虚拟控制器输出###VIRTUAL_CONTROLLER")), &currentSelection, controllerSchemeNames().data(), controllerSchemeNames().size()))
 			{
 				SettingsManager::getV<ControllerScheme>(SettingID::VIRTUAL_CONTROLLER)->set(enum_value<ControllerScheme>(currentSelection));
 			}

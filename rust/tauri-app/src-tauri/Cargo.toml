@@ -1,0 +1,29 @@
+[package]
+name = "joyshockmapper-tauri"
+version = "0.1.0"
+description = "JoyShockMapper visual controller studio"
+edition = "2024"
+
+[lib]
+name = "joyshockmapper_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+joyshockmapper-ui-model = { path = "../../ui-model" }
+joyshockmapper-input-engine = { path = "../../input-engine" }
+joyshockmapper-gyro-engine = { path = "../../gyro-engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11.5", features = ["tray-icon"] }
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-process = "2.3.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

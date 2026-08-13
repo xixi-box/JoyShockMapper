@@ -7,6 +7,7 @@
 #include <atomic>
 #include <map>
 #include <optional>
+#include <span>
 #include "Mapping.h"
 #include "InputSelector.h"
 
@@ -16,12 +17,15 @@ class JSMVariable;
 
 class JslWrapper;
 
+void RequestShowMainWindow();
+
 class AppIf
 {
 public:
 	virtual ~AppIf() = default;
 
 	virtual void createChord(ButtonID chord) = 0;
+	virtual void editMapping(JSMVariable<Mapping>* variable, string_view name) = 0;
 };
 
 class Application : protected AppIf
@@ -35,14 +39,20 @@ public:
 
 	void cleanUp();
 
-	void draw(SDL_Gamepad *controller);
+	void draw(std::span<SDL_Gamepad*> controllers);
 
 protected:
 	void createChord(ButtonID chord) override;
+	void editMapping(JSMVariable<Mapping>* variable, string_view name) override;
 
 
 private:
 	static void HelpMarker(string_view cmd);
+	void updateDeviceProfiles(std::span<SDL_Gamepad*> controllers);
+	void saveActiveDeviceProfiles();
+	void loadUiSettings();
+	void saveUiSettings() const;
+	bool setStartWithWindows(bool enabled);
 
 	template<typename T>
 	static void drawCombo(SettingID stg, ButtonID chord, ImGuiComboFlags flags = ImGuiComboFlags_NoArrowButton, bool labeled = false);
@@ -65,7 +75,6 @@ private:
 		
 		ButtonID _chord;
 	public:
-		static InputSelector _inputSelector;
 		static AppIf * _app;
 
 		string _name;
@@ -78,8 +87,30 @@ private:
 			return _chord < rhs._chord;
 		}
 	};
+	enum class MainPage
+	{
+		Home,
+		Mappings,
+		Gyro,
+		Settings,
+	};
+
 	ButtonID _newTab = ButtonID::NONE;
 	map<ButtonID, BindingTab> _tabs;
+	InputSelector _inputSelector;
+	MainPage _mainPage = MainPage::Home;
+	ButtonID _selectedButton = ButtonID::S;
+	std::string _leftProfileKey;
+	std::string _rightProfileKey;
+	std::string _fullProfileKey;
+	bool _leftJoyConConnected = false;
+	bool _rightJoyConConnected = false;
+	bool _minimizeToTray = true;
+	bool _startWithWindows = false;
+	bool _flyMouseEnabled = true;
+	ButtonID _flyMouseHoldButton = ButtonID::ZL;
+	float _flyMouseSensitivity = 1.f;
+	std::string _settingsStatus;
 	bool show_demo_window = false;
 	bool show_plot_demo_window = false;
 	SDL_Window* window = nullptr;

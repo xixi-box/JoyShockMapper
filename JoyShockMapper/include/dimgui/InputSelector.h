@@ -11,7 +11,7 @@ class InputSelector
 {
 public:
 	InputSelector() = default;
-	void show(JSMVariable<Mapping> *variable, string_view name);
+	void show(JSMVariable<Mapping> *variable, string_view name, std::function<void()> afterCommit = {});
 	void draw();
 private:
 	struct MappingTabItem
@@ -48,9 +48,11 @@ private:
 		} _activeHeader;
 	};
 
-	JSMVariable<Mapping> *_variable;
+	JSMVariable<Mapping> *_variable = nullptr;
 	std::string _name;
 	std::list<MappingTabItem> tabList;
 	size_t activeTab = 0;
+	bool _combineKeys = false;
+	std::function<void()> _afterCommit;
 	char label[64] = "";
 };

@@ -10,7 +10,13 @@
 #include "AutoConnect.h"
 #include "SettingsManager.h"
 #include "JoyShock.h"
+#if defined(SDL) && !defined(JSM_EMBEDDED_CORE)
+#include "dimgui/Application.h"
+#endif
 #include <filesystem>
+#include <condition_variable>
+#include <fstream>
+#include <queue>
 #define _USE_MATH_DEFINES
 #include <math.h> // M_PI
 
@@ -40,6 +46,100 @@ unique_ptr<JSM::AutoConnect> autoConnectThread;
 unique_ptr<PollingThread> minimizeThread;
 bool devicesCalibrating = false;
 unordered_map<int, shared_ptr<JoyShock>> handle_to_joyshock;
+
+#ifdef JSM_EMBEDDED_CORE
+static mutex embedded_command_mutex;
+static condition_variable embedded_command_cv;
+static queue<string> embedded_commands;
+static atomic_int embedded_device_count = 0;
+static atomic_int embedded_device_mask = 0;
+static atomic_int embedded_simulated_buttons = 0;
+static atomic_int embedded_mouse_event_count = 0;
+static atomic_int embedded_key_event_count = 0;
+
+extern "C" __declspec(dllexport) int jsm_core_device_count()
+{
+	return embedded_device_count.load();
+}
+
+extern "C" __declspec(dllexport) int jsm_core_device_mask()
+{
+	return embedded_device_mask.load();
+}
+
+extern "C" __declspec(dllexport) void jsm_core_set_simulated_buttons(int buttons)
+{
+	embedded_simulated_buttons.store(buttons);
+}
+
+extern "C" __declspec(dllexport) int jsm_core_simulated_buttons()
+{
+	return embedded_simulated_buttons.load();
+}
+
+extern "C" __declspec(dllexport) void jsm_core_record_mouse_event(float x, float y)
+{
+	if (abs(x) > 0.0001f || abs(y) > 0.0001f)
+		embedded_mouse_event_count.fetch_add(1);
+}
+
+extern "C" __declspec(dllexport) void jsm_core_record_key_event()
+{
+	embedded_key_event_count.fetch_add(1);
+}
+
+extern "C" __declspec(dllexport) int jsm_core_mouse_event_count() { return embedded_mouse_event_count.load(); }
+extern "C" __declspec(dllexport) int jsm_core_key_event_count() { return embedded_key_event_count.load(); }
+
+static uint64_t embeddedProfileHash(string_view value)
+{
+	uint64_t hash = 14695981039346656037ull;
+	for (unsigned char ch : value)
+	{
+		hash ^= ch;
+		hash *= 1099511628211ull;
+	}
+	return hash;
+}
+
+extern "C" __declspec(dllexport) void jsm_core_load_device_profile(const char *identity, int split_type)
+{
+	if (!identity || !*identity)
+		return;
+	string key = split_type == JS_SPLIT_TYPE_LEFT ? "left|" : split_type == JS_SPLIT_TYPE_RIGHT ? "right|" : "full|";
+	key += identity;
+	stringstream filename;
+	filename << "device_" << hex << setw(16) << setfill('0') << embeddedProfileHash(key) << ".jsmprofile";
+	const char *localAppData = getenv("LOCALAPPDATA");
+	filesystem::path root = localAppData && *localAppData ? filesystem::path(localAppData) : filesystem::temp_directory_path();
+	filesystem::path directory = root / "JoyShockMapper" / "devices";
+	error_code error;
+	filesystem::create_directories(directory, error);
+	filesystem::path profile = directory / filename.str();
+	if (!filesystem::exists(profile))
+	{
+		ofstream output(profile);
+		output << "# JoyShockMapper automatic device profile\n";
+	}
+	commandRegistry.loadConfigFile(profile.string());
+}
+
+extern "C" __declspec(dllexport) void jsm_core_submit_command(const char *command)
+{
+	if (!command)
+		return;
+	{
+		lock_guard guard(embedded_command_mutex);
+		embedded_commands.emplace(command);
+	}
+	embedded_command_cv.notify_one();
+}
+
+extern "C" __declspec(dllexport) void jsm_core_stop()
+{
+	jsm_core_submit_command("QUIT");
+}
+#endif
 
 int input_pipe_fd[2];
 int triggerCalibrationStep = 0;
@@ -1146,6 +1246,7 @@ void connectDevices(bool mergeJoycons = true)
 	handle_to_joyshock.clear();
 	this_thread::sleep_for(100ms);
 	int numConnected = jsl->ConnectDevices();
+	int deviceMask = 0;
 	vector<int> deviceHandles(numConnected, 0);
 	if (numConnected > 0)
 	{
@@ -1160,6 +1261,7 @@ void connectDevices(bool mergeJoycons = true)
 		for (auto handle : deviceHandles) // Don't use foreach!
 		{
 			auto type = jsl->GetControllerSplitType(handle);
+			deviceMask |= type == JS_SPLIT_TYPE_LEFT ? 1 : type == JS_SPLIT_TYPE_RIGHT ? 2 : 3;
 			auto otherJoyCon = find_if(handle_to_joyshock.begin(), handle_to_joyshock.end(),
 			  [type](auto &pair)
 			  {
@@ -1196,10 +1298,14 @@ void connectDevices(bool mergeJoycons = true)
 	//	tray->SendNotification(wstring(msg.begin(), msg.end()));
 	// }
 
-	// if (numConnected != 0) {
-	//	COUT << "All devices have started continuous gyro calibration\n";
-	// }
-}
+		// if (numConnected != 0) {
+		//	COUT << "All devices have started continuous gyro calibration\n";
+		// }
+	#ifdef JSM_EMBEDDED_CORE
+		embedded_device_count.store(numConnected);
+		embedded_device_mask.store(numConnected > 0 ? deviceMask : 0);
+	#endif
+	}
 
 void updateSimPressPartner(ButtonID sim, ButtonID origin, const Mapping &newVal)
 {
@@ -1474,7 +1580,11 @@ void beforeShowTrayMenu()
 	else
 	{
 		tray->ClearMenuMap();
+			#if defined(SDL) && !defined(JSM_EMBEDDED_CORE)
+			tray->AddMenuItem(U("打开 JoyShockMapper"), &RequestShowMainWindow);
+		#else
 		tray->AddMenuItem(U("Show Console"), &ShowConsole);
+		#endif
 		tray->AddMenuItem(U("Reconnect controllers"), []()
 		  { WriteToConsole("RECONNECT_CONTROLLERS"); });
 		tray->AddMenuItem(
@@ -1540,7 +1650,7 @@ void beforeShowTrayMenu()
 		tray->AddMenuItem(U("Quit"), []()
 		  { WriteToConsole("QUIT"); });
 	}
-}
+	}
 
 // Perform all cleanup tasks when JSM is exiting
 void cleanUp()
@@ -1549,12 +1659,23 @@ void cleanUp()
 	{
 		tray->Hide();
 	}
+	#ifndef JSM_EMBEDDED_CORE
 	HideConsole();
+	#endif
+	autoConnectThread.reset();
+	autoLoadThread.reset();
+	minimizeThread.reset();
 	jsl->DisconnectAndDisposeAll();
 	jsl.reset();
 	handle_to_joyshock.clear(); // Destroy Vigem Gamepads
+	#ifndef JSM_EMBEDDED_CORE
 	ReleaseConsole();
+	#endif
 	commandRegistry.clear();
+	#ifdef JSM_EMBEDDED_CORE
+	embedded_device_count.store(0);
+	embedded_device_mask.store(0);
+	#endif
 }
 
 int filterClampByte(int current, int next)
@@ -2761,6 +2882,15 @@ void initJsmSettings(CmdRegistry *commandRegistry)
 }
 
 #ifdef _WIN32
+#ifdef JSM_EMBEDDED_CORE
+extern "C" __declspec(dllexport) int jsm_core_run(const char *working_directory)
+{
+	void *trayIconData = nullptr;
+	int argc = 0;
+	string module;
+	if (working_directory && *working_directory)
+		SetCWD(working_directory);
+#else
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, LPWSTR cmdLine, int cmdShow)
 {
 	auto trayIconData = hInstance;
@@ -2771,6 +2901,7 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, LPWSTR cmdLi
 	auto handle = GetCurrentProcess();
 	QueryFullProcessImageNameW(handle, 0, &wmodule[0], &length);
 	string module(wmodule.begin(), wmodule.begin() + length);
+#endif
 
 #else
 int main(int argc, char *argv[])
@@ -2804,7 +2935,9 @@ int main(int argc, char *argv[])
 		mappings.push_back(newButton);
 	}
 	// console
+	#ifndef JSM_EMBEDDED_CORE
 	initConsole();
+	#endif
 	#ifndef _WIN32
 	// Set up the console to receive commands from the pipe
 	// This is only needed on non-Windows platforms
@@ -2819,6 +2952,7 @@ int main(int argc, char *argv[])
 	//  Threads need to be created before listeners
 	initJsmSettings(&commandRegistry);
 
+	#ifndef JSM_EMBEDDED_CORE
 	for (int i = argc - 1; i >= 0; --i)
 	{
 #if _WIN32
@@ -2832,6 +2966,7 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+	#endif
 
 	if (autoLoadThread && autoLoadThread->isRunning())
 	{
@@ -2859,7 +2994,7 @@ int main(int argc, char *argv[])
 	// Add Macro commands
 	commandRegistry.add((new JSMMacro("RESET_MAPPINGS"))->SetMacro(bind(&do_RESET_MAPPINGS, &commandRegistry))->setHelp("Delete all custom bindings and reset to default,\nand run script OnReset.txt in JSM_DIRECTORY."));
 	commandRegistry.add((new JSMMacro("NO_GYRO_BUTTON"))->SetMacro(bind(&do_NO_GYRO_BUTTON))->setHelp("Enable gyro at all times, without any GYRO_OFF binding."));
-	commandRegistry.add((new JSMMacro("RECONNECT_CONTROLLERS"))->SetMacro(bind(&do_RECONNECT_CONTROLLERS, placeholders::_2, [&commandRegistry]()
+	commandRegistry.add((new JSMMacro("RECONNECT_CONTROLLERS"))->SetMacro(bind(&do_RECONNECT_CONTROLLERS, placeholders::_2, []()
 		{
 			if (!commandRegistry.loadConfigFile("OnReconnect.txt"))
 			{
@@ -2891,7 +3026,9 @@ int main(int argc, char *argv[])
 	                      ->SetMacro([&quit](JSMMacro *, string_view)
 	                        {
 		                      quit = true;
+		                      #ifndef JSM_EMBEDDED_CORE
 		                      WriteToConsole(""); // If ran from autoload thread, you need to send RETURN to resume the main loop and check the quit flag.
+		                      #endif
 		                      return true; })
 	                      ->setHelp("Close the application."));
 
@@ -2900,11 +3037,13 @@ int main(int argc, char *argv[])
 	connectDevices();
 	jsl->SetCallback(&joyShockPollCallback);
 	jsl->SetTouchCallback(&touchCallback);
+	#ifndef JSM_EMBEDDED_CORE
 	tray.reset(TrayIcon::getNew(trayIconData, &beforeShowTrayMenu));
 	if (tray)
 	{
 		tray->Show();
 	}
+	#endif
 
 	do_RESET_MAPPINGS(&commandRegistry); // OnReset.txt
 	if (commandRegistry.loadConfigFile("OnStartup.txt"))
@@ -2918,6 +3057,7 @@ int main(int argc, char *argv[])
 		COUT << " file to load.\n";
 	}
 
+	#ifndef JSM_EMBEDDED_CORE
 	for (int i = 0; i < argc; ++i)
 	{
 #if _WIN32
@@ -2931,11 +3071,18 @@ int main(int argc, char *argv[])
 			SettingsManager::getV<Switch>(SettingID::AUTOLOAD)->set(Switch::OFF);
 		}
 	}
+	#endif
 	// The main loop is simple and reads like pseudocode
 	string enteredCommand;
 	while (!quit)
 	{
-		#if _WIN32
+		#if defined(JSM_EMBEDDED_CORE)
+			unique_lock lock(embedded_command_mutex);
+			embedded_command_cv.wait(lock, [] { return !embedded_commands.empty(); });
+			enteredCommand = std::move(embedded_commands.front());
+			embedded_commands.pop();
+			lock.unlock();
+		#elif _WIN32
 			getline(cin, enteredCommand);
         #else
 			std::unique_lock<std::mutex> lock(commandQueueMutex);
@@ -2950,7 +3097,7 @@ int main(int argc, char *argv[])
 
 		commandRegistry.processLine(enteredCommand);
 	}
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(JSM_EMBEDDED_CORE)
 	LocalFree(argv);
 #endif
 	cleanUp();
