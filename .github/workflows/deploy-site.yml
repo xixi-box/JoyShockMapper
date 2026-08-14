@@ -66,11 +66,13 @@ jobs:
           password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
 
       - name: Build and push site image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: site
           file: site/Dockerfile
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}-site:${{ github.sha }}
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}-site:latest
