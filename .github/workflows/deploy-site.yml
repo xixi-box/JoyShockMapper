@@ -115,24 +115,18 @@ jobs:
           export DOCKER_CONFIG="$(mktemp -d)"
           trap 'rm -rf "$DOCKER_CONFIG"' EXIT
 
-          printf '%s' "${{ github.token }}" |
-            docker login "$GHCR_REGISTRY" -u "${{ github.actor }}" --password-stdin
           printf '%s' "$ALIYUN_ACR_PASSWORD" |
             docker login "$ALIYUN_ACR_REGISTRY" -u "$ALIYUN_ACR_USERNAME" --password-stdin
 
-          GHCR_SITE_IMAGE="$GHCR_REGISTRY/$GHCR_IMAGE_NAME-site"
           ACR_SITE_IMAGE="$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_IMAGE_NAME"
 
           if docker pull "$ACR_SITE_IMAGE:latest"; then
             SITE_IMAGE="$ACR_SITE_IMAGE:latest"
-          elif docker pull "$GHCR_SITE_IMAGE:$GITHUB_SHA"; then
-            echo "ACR pull failed; using GHCR fallback."
-            SITE_IMAGE="$GHCR_SITE_IMAGE:$GITHUB_SHA"
           elif docker pull "$ACR_SITE_IMAGE:$GITHUB_SHA"; then
-            echo "ACR SHA tag pull failed; using ACR fallback."
+            echo "ACR latest pull failed; using ACR SHA tag."
             SITE_IMAGE="$ACR_SITE_IMAGE:$GITHUB_SHA"
           else
-            echo "Unable to pull site image from ACR or GHCR." >&2
+            echo "Unable to pull site image from ACR." >&2
             exit 1
           fi
 
