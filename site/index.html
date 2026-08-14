@@ -13,12 +13,18 @@
   <link rel="icon" type="image/png" href="assets/gyro_icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Press+Start+2P&display=swap" />
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
-  <div class="noise"></div>
-  <canvas id="fx-canvas"></canvas>
+  <div class="bg-decor">
+    <div class="deco-circle c1"></div>
+    <div class="deco-circle c2"></div>
+    <div class="deco-circle c3"></div>
+    <div class="deco-plus p1">+</div>
+    <div class="deco-plus p2">+</div>
+    <div class="deco-plus p3">+</div>
+  </div>
 
   <div class="progress-bar" id="progress-bar"></div>
 
@@ -34,7 +40,6 @@
         <a href="#joycon" data-i18n="nav.joycon">Joy-Con 映射</a>
         <a href="#djimic" data-i18n="nav.djimic">DJI Mic</a>
         <a href="#features" data-i18n="nav.features">特性</a>
-        <a href="#architecture" data-i18n="nav.arch">架构</a>
         <a href="#download" data-i18n="nav.download">下载</a>
         <a href="https://github.com/xixi-box/JoyShockMapper" target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
@@ -79,72 +84,66 @@
           <a class="meta-pill" href="https://github.com/Electronicks/JoyShockMapper" target="_blank" rel="noopener noreferrer" data-i18n="hero.upstream">上游项目</a>
         </div>
 
-        <!-- Hero visual: JoyCon + DJI Mic -->
+        <!-- Joy-Con hero visual -->
         <div class="hero-visual" id="hero-visual">
-          <div class="split-visual">
-            <!-- JoyCon panel -->
-            <div class="panel panel-joycon">
-              <div class="panel-label"><span class="dot-pulse"></span><span data-i18n="hero.joycon">Joy-Con 映射</span></div>
-              <div class="joycon-mock">
-                <svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Joy-Con illustration">
-                  <defs>
-                    <linearGradient id="jcBody" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#39465a"/>
-                      <stop offset="100%" stop-color="#1c2431"/>
-                    </linearGradient>
-                    <linearGradient id="jcAccent" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#d97757"/>
-                      <stop offset="100%" stop-color="#f0a06f"/>
-                    </linearGradient>
-                  </defs>
-                  <rect x="15" y="10" width="90" height="240" rx="45" ry="45" fill="url(#jcBody)" stroke="#4a586d" stroke-width="1.5"/>
-                  <rect x="15" y="10" width="90" height="240" rx="45" ry="45" fill="none" stroke="#ffffff" stroke-opacity="0.04" stroke-width="6"/>
-                  <circle cx="60" cy="60" r="20" fill="none" stroke="#4a586d" stroke-width="2"/>
-                  <circle cx="60" cy="60" r="9" fill="none" stroke="url(#jcAccent)" stroke-width="2"/>
-                  <circle cx="60" cy="150" r="24" fill="none" stroke="#4a586d" stroke-width="2.5"/>
-                  <circle cx="60" cy="150" r="13" fill="none" stroke="url(#jcAccent)" stroke-width="2"/>
-                  <rect x="42" y="95" width="36" height="12" rx="6" fill="none" stroke="#4a586d" stroke-width="1.5"/>
-                  <rect x="42" y="112" width="36" height="12" rx="6" fill="none" stroke="#4a586d" stroke-width="1.5"/>
-                  <circle cx="60" cy="196" r="6" fill="#d97757" opacity="0.85"/>
-                  <text x="60" y="232" text-anchor="middle" fill="#5b6a7d" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1">JOY-CON</text>
-                </svg>
-              </div>
-              <div class="panel-tags">
-                <span class="mini-tag">Gyro</span>
-                <span class="mini-tag">Map</span>
-                <span class="mini-tag">ViGEm</span>
-              </div>
-            </div>
-
-            <!-- DJI Mic panel -->
-            <div class="panel panel-mic">
-              <div class="panel-label"><span class="dot-pulse"></span><span data-i18n="hero.mic">DJI Mic 状态</span></div>
-              <div class="mic-mock">
-                <div class="mic-receiver">
-                  <div class="mic-screen">
-                    <div class="screen-line"><span class="sc-label">RX</span><span class="sc-bar"><i style="width:86%"></i></span><span class="sc-val">86%</span></div>
-                    <div class="screen-line"><span class="sc-label">TX1</span><span class="sc-bar"><i style="width:64%"></i></span><span class="sc-val">64%</span></div>
-                    <div class="screen-line"><span class="sc-label">LVL</span><span class="sc-bar lvl"><i style="width:55%"></i></span><span class="sc-val">-12dB</span></div>
+          <div class="switch-console">
+            <div class="console-left">
+              <div class="joycon-body jc-left">
+                <div class="jc-inner">
+                  <div class="jc-stick"><span class="stick-cap"></span></div>
+                  <div class="jc-buttons">
+                    <i class="b-up"></i><i class="b-right"></i><i class="b-down"></i><i class="b-left"></i>
                   </div>
-                  <div class="mic-screen-grid"></div>
                 </div>
-                <div class="mic-antenna mic-antenna-1"></div>
-                <div class="mic-antenna mic-antenna-2"></div>
-                <div class="mic-brand">DJI MIC 2</div>
-                <div class="mic-link" data-i18n="hero.mic.live">实时连接中</div>
-              </div>
-              <div class="panel-tags">
-                <span class="mini-tag">Battery</span>
-                <span class="mini-tag">Level</span>
-                <span class="mini-tag">Status</span>
               </div>
             </div>
+            <div class="console-screen">
+              <div class="screen-top-bar">
+                <span class="screen-dots"></span>
+                <span class="screen-title">JoyShockMapper</span>
+              </div>
+              <div class="screen-body">
+                <div class="gyro-badge">
+                  <span class="dot-pulse"></span>
+                  <span data-i18n="hero.gyro">Gyro On</span>
+                </div>
+                <div class="screen-rows">
+                  <div class="srow"><span class="k">ZL</span><span class="v" data-i18n="hero.map1">按住 → 陀螺仪瞄准</span></div>
+                  <div class="srow"><span class="k">A</span><span class="v" data-i18n="hero.map2">单击 → 鼠标左键</span></div>
+                  <div class="srow"><span class="k">B</span><span class="v" data-i18n="hero.map3">双击 → Ctrl</span></div>
+                </div>
+              </div>
+              <div class="screen-bottom">
+                <span class="scr-dot"></span>
+                <span class="scr-label" data-i18n="hero.screen">实时映射中</span>
+              </div>
+            </div>
+            <div class="console-right">
+              <div class="joycon-body jc-right">
+                <div class="jc-inner">
+                  <div class="jc-home"><span class="home-dot"></span></div>
+                  <div class="jc-stick"><span class="stick-cap"></span></div>
+                  <div class="jc-actions">
+                    <i class="b-y"></i><i class="b-x"></i>
+                    <i class="b-a"></i><i class="b-b"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-float-tag ft1">
+            <span class="dot-pulse"></span>
+            <span data-i18n="hero.jcon">Joy-Con ×2</span>
+          </div>
+          <div class="hero-float-tag ft2">
+            <span class="dot-pulse"></span>
+            <span data-i18n="hero.djimic">DJI Mic</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Focus strip: the two pillars -->
+    <!-- Focus strip -->
     <section class="focus-strip">
       <div class="container focus-grid">
         <div class="focus-item reveal">
@@ -182,22 +181,22 @@
 
         <div class="feature-grid">
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🎯</span></div>
+            <div class="feature-icon icon-gyro"><span>🎯</span></div>
             <h3 data-i18n="jc1.title">陀螺仪瞄准</h3>
             <p data-i18n="jc1.desc">按住 ZL 启用陀螺仪鼠标移动，精细/快速灵敏度、加速与低速平滑对应原生参数。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>⌨️</span></div>
+            <div class="feature-icon icon-keys"><span>⌨️</span></div>
             <h3 data-i18n="jc2.title">单击 / 双击 / 多键</h3>
             <p data-i18n="jc2.desc">单击与双击动作分别映射，支持单键与多键组合快捷键输出。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>💾</span></div>
+            <div class="feature-icon icon-save"><span>💾</span></div>
             <h3 data-i18n="jc3.title">左右 Joy-Con 独立配置</h3>
             <p data-i18n="jc3.desc">按控制器身份自动保存并恢复映射；有序列号按序列号区分，否则左右侧分别共享。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🔗</span></div>
+            <div class="feature-icon icon-link"><span>🔗</span></div>
             <h3 data-i18n="jc4.title">虚拟手柄 / 键盘输出</h3>
             <p data-i18n="jc4.desc">SDL3 原生轮询，经 ViGEm 输出 Xbox/DS4 虚拟手柄，或直接模拟键盘鼠标。</p>
           </article>
@@ -206,7 +205,7 @@
     </section>
 
     <!-- DJI Mic section -->
-    <section id="djimic" class="section section-alt">
+    <section id="djimic" class="section section-mic">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker" data-i18n="mic.kicker">DJI MIC</span>
@@ -277,7 +276,7 @@
       </div>
     </section>
 
-    <!-- Features (all) -->
+    <!-- Features -->
     <section id="features" class="section">
       <div class="container">
         <div class="section-head">
@@ -288,32 +287,32 @@
 
         <div class="feature-grid">
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🎮</span></div>
+            <div class="feature-icon icon-ui"><span>🎮</span></div>
             <h3 data-i18n="f1.title">手柄控制台界面</h3>
             <p data-i18n="f1.desc">借鉴 JoyHarness 的深色手柄控制台：首页直接展示手柄示意图、键位连线与当前映射。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🌐</span></div>
+            <div class="feature-icon icon-lang"><span>🌐</span></div>
             <h3 data-i18n="f2.title">中英文即时切换</h3>
             <p data-i18n="f2.desc">默认简体中文，右上角一键切换 English / 中文，无需重启。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🖥️</span></div>
+            <div class="feature-icon icon-exe"><span>🖥️</span></div>
             <h3 data-i18n="f3.title">单文件便携 EXE</h3>
             <p data-i18n="f3.desc">Tauri/Rust 单可执行文件，C++ 核心静态链接进同一进程，无需安装。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🧩</span></div>
+            <div class="feature-icon icon-config"><span>🧩</span></div>
             <h3 data-i18n="f4.title">兼容文本配置</h3>
             <p data-i18n="f4.desc">OnStartup.txt / OnReset.txt / GyroConfigs / AutoLoad 原有工作流保持可用。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🪟</span></div>
+            <div class="feature-icon icon-tray"><span>🪟</span></div>
             <h3 data-i18n="f5.title">托盘与开机自启</h3>
             <p data-i18n="f5.desc">最小化到系统托盘，映射与陀螺仪后台继续运行；开机自启无需管理员权限。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🔘</span></div>
+            <div class="feature-icon icon-short"><span>🔘</span></div>
             <h3 data-i18n="f6.title">菱形快捷键</h3>
             <p data-i18n="f6.desc">复制/剪切/粘贴、系统截图、定位输入控件等特殊功能，普通按键由 C++ 实时执行。</p>
           </article>
@@ -321,47 +320,8 @@
       </div>
     </section>
 
-    <!-- Architecture -->
-    <section id="architecture" class="section section-alt">
-      <div class="container">
-        <div class="section-head">
-          <span class="section-kicker" data-i18n="arch.kicker">ARCHITECTURE</span>
-          <h2 class="section-title" data-i18n="arch.title">运行架构</h2>
-          <p class="section-sub" data-i18n="arch.sub">两种语言、一条进程，成熟核心与现代化界面各司其职。</p>
-        </div>
-
-        <div class="arch-row">
-          <div class="arch-flow reveal">
-            <div class="arch-layer arch-ui">
-              <div class="arch-layer-head">
-                <span class="arch-tag">Rust · Tauri</span>
-                <span class="arch-pct">UI</span>
-              </div>
-              <h3 data-i18n="arch.ui">界面层</h3>
-              <p data-i18n="arch.ui.desc">窗口、设置、托盘、自启与持久化 · DJI Mic 状态展示</p>
-            </div>
-            <div class="arch-arrow">
-              <span class="arrow-line"></span>
-              <span class="arrow-label">C ABI</span>
-            </div>
-            <div class="arch-layer arch-core">
-              <div class="arch-layer-head">
-                <span class="arch-tag">C++ · SDL3</span>
-                <span class="arch-pct">CORE</span>
-              </div>
-              <h3 data-i18n="arch.core">嵌入式核心</h3>
-              <p data-i18n="arch.core.desc">Joy-Con 轮询 · 实时映射 · 陀螺仪 · DJI Mic 协议解析</p>
-            </div>
-            <div class="arch-note" data-i18n="arch.note">
-              C++ 核心编译为静态库，链接进同一进程 —— 不启动额外后端程序。
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Download -->
-    <section id="download" class="section">
+    <section id="download" class="section section-download">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker" data-i18n="download.kicker">GET IT</span>
