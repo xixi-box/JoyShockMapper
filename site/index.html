@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JoyShockMapper GUI — 手柄映射 · 陀螺仪瞄准</title>
-  <meta name="description" content="JoyShockMapper GUI：基于 JoyShockMapper 的社区图形界面版本。用 DualSense / DualShock 4 / Joy-Con / Pro Controller 在 PC 上玩游戏，支持陀螺仪瞄准与完整按键映射。" />
-  <meta name="keywords" content="JoyShockMapper, 陀螺仪, 手柄映射, DualSense, Joy-Con, Pro Controller, gyro, controller mapping" />
-  <meta property="og:title" content="JoyShockMapper GUI" />
-  <meta property="og:description" content="社区 GUI 版手柄映射工具，支持陀螺仪瞄准、单键/多键映射、中英文界面。" />
+  <title>JoyShockMapper GUI — Joy-Con 外部映射 · DJI Mic 状态</title>
+  <meta name="description" content="JoyShockMapper GUI：把 Joy-Con 变成 PC 的无线输入工具（陀螺仪瞄准 + 完整按键映射），同时内置 DJI Mic 接收器实时状态监视（电量、充电、输入电平、连接状态）。" />
+  <meta name="keywords" content="JoyShockMapper, Joy-Con, 陀螺仪, 手柄映射, DJI Mic, 大疆麦克风, DualSense, Pro Controller" />
+  <meta property="og:title" content="JoyShockMapper GUI — Joy-Con 外部映射 · DJI Mic 状态" />
+  <meta property="og:description" content="把 Joy-Con 变成 PC 无线输入工具，实时显示 DJI Mic 状态。" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://jsm.wangshun.work/" />
   <link rel="icon" type="image/png" href="assets/gyro_icon.png" />
@@ -31,11 +31,11 @@
         <span class="brand-text">JoyShockMapper <em>GUI</em></span>
       </a>
       <nav class="nav-links" id="nav-links">
+        <a href="#joycon" data-i18n="nav.joycon">Joy-Con 映射</a>
+        <a href="#djimic" data-i18n="nav.djimic">DJI Mic</a>
         <a href="#features" data-i18n="nav.features">特性</a>
-        <a href="#devices" data-i18n="nav.devices">设备</a>
         <a href="#architecture" data-i18n="nav.arch">架构</a>
         <a href="#download" data-i18n="nav.download">下载</a>
-        <a href="#build" data-i18n="nav.build">构建</a>
         <a href="https://github.com/xixi-box/JoyShockMapper" target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
       <div class="header-actions">
@@ -57,11 +57,11 @@
       <div class="container hero-inner">
         <div class="hero-badge" data-i18n="hero.badge">社区 GUI 版 · 基于 JoyShockMapper</div>
         <h1 class="hero-title">
-          <span data-i18n="hero.title1">把手柄的潜力</span>
-          <span class="gradient-text" data-i18n="hero.title2">全部释放到 PC</span>
+          <span data-i18n="hero.title1">把 Joy-Con 变成你的</span>
+          <span class="gradient-text" data-i18n="hero.title2">PC 无线输入工具</span>
         </h1>
         <p class="hero-sub" data-i18n="hero.sub">
-          用 DualSense / DualShock 4 / Joy-Con / Pro Controller 玩游戏，支持陀螺仪瞄准、完整按键映射与文本配置工作流 —— 现在带上了现代图形界面。
+          Joy-Con 外部映射 + 陀螺仪瞄准 + 完整按键映射，同屏实时监视你的 DJI Mic 电量与状态 —— 一个便携 EXE，全部搞定。
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#download">
@@ -79,80 +79,210 @@
           <a class="meta-pill" href="https://github.com/Electronicks/JoyShockMapper" target="_blank" rel="noopener noreferrer" data-i18n="hero.upstream">上游项目</a>
         </div>
 
-        <!-- Hero visual: controller mock -->
+        <!-- Hero visual: JoyCon + DJI Mic -->
         <div class="hero-visual" id="hero-visual">
-          <div class="controller-frame">
-            <div class="controller-glow"></div>
-            <svg class="controller-svg" viewBox="0 0 520 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gamepad illustration">
-              <defs>
-                <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#2b3544"/>
-                  <stop offset="100%" stop-color="#161d27"/>
-                </linearGradient>
-                <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#d97757"/>
-                  <stop offset="100%" stop-color="#f0a06f"/>
-                </linearGradient>
-              </defs>
-              <rect x="60" y="40" width="400" height="180" rx="90" ry="90" fill="url(#bodyGrad)" stroke="#3a4556" stroke-width="2"/>
-              <rect x="120" y="60" width="110" height="45" rx="8" fill="rgba(255,255,255,0.04)" stroke="#3a4556"/>
-              <rect x="290" y="60" width="110" height="45" rx="8" fill="rgba(255,255,255,0.04)" stroke="#3a4556"/>
-              <circle cx="160" cy="100" r="16" fill="none" stroke="url(#accentGrad)" stroke-width="2.5"/>
-              <circle cx="260" cy="140" r="34" fill="none" stroke="#465364" stroke-width="2.5"/>
-              <circle cx="260" cy="140" r="18" fill="none" stroke="#3a4556" stroke-width="2.5"/>
-              <circle cx="330" cy="110" r="9" fill="none" stroke="url(#accentGrad)" stroke-width="2.5"/>
-              <path d="M 385 80 v 20 M 375 90 h 20" stroke="#465364" stroke-width="2.5" stroke-linecap="round"/>
-              <rect x="235" y="85" width="50" height="110" rx="16" fill="none" stroke="#465364" stroke-width="2" transform="rotate(0 260 140)"/>
-              <rect x="235" y="85" width="50" height="110" rx="16" fill="none" stroke="#465364" stroke-width="2" transform="rotate(90 260 140)"/>
-              <circle cx="152" cy="162" r="10" fill="#d97757" opacity="0.9"/>
-              <circle cx="368" cy="162" r="10" fill="#d97757" opacity="0.9"/>
-              <circle cx="130" cy="120" r="5" fill="#f0a06f"/>
-              <circle cx="130" cy="130" r="5" fill="#f0a06f"/>
-              <circle cx="140" cy="125" r="5" fill="#f0a06f"/>
-              <rect x="176" y="118" width="22" height="14" rx="3" fill="none" stroke="#d97757" stroke-width="2"/>
-              <text x="260" y="230" text-anchor="middle" fill="#5b6a7d" font-family="JetBrains Mono, monospace" font-size="11" letter-spacing="3">JOYSHOCKMAPPER</text>
-            </svg>
-            <div class="float-tag float-tag-1">
-              <span class="dot-pulse"></span>
-              <span data-i18n="hero.tag1">Gyro On</span>
+          <div class="split-visual">
+            <!-- JoyCon panel -->
+            <div class="panel panel-joycon">
+              <div class="panel-label"><span class="dot-pulse"></span><span data-i18n="hero.joycon">Joy-Con 映射</span></div>
+              <div class="joycon-mock">
+                <svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Joy-Con illustration">
+                  <defs>
+                    <linearGradient id="jcBody" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#39465a"/>
+                      <stop offset="100%" stop-color="#1c2431"/>
+                    </linearGradient>
+                    <linearGradient id="jcAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#d97757"/>
+                      <stop offset="100%" stop-color="#f0a06f"/>
+                    </linearGradient>
+                  </defs>
+                  <rect x="15" y="10" width="90" height="240" rx="45" ry="45" fill="url(#jcBody)" stroke="#4a586d" stroke-width="1.5"/>
+                  <rect x="15" y="10" width="90" height="240" rx="45" ry="45" fill="none" stroke="#ffffff" stroke-opacity="0.04" stroke-width="6"/>
+                  <circle cx="60" cy="60" r="20" fill="none" stroke="#4a586d" stroke-width="2"/>
+                  <circle cx="60" cy="60" r="9" fill="none" stroke="url(#jcAccent)" stroke-width="2"/>
+                  <circle cx="60" cy="150" r="24" fill="none" stroke="#4a586d" stroke-width="2.5"/>
+                  <circle cx="60" cy="150" r="13" fill="none" stroke="url(#jcAccent)" stroke-width="2"/>
+                  <rect x="42" y="95" width="36" height="12" rx="6" fill="none" stroke="#4a586d" stroke-width="1.5"/>
+                  <rect x="42" y="112" width="36" height="12" rx="6" fill="none" stroke="#4a586d" stroke-width="1.5"/>
+                  <circle cx="60" cy="196" r="6" fill="#d97757" opacity="0.85"/>
+                  <text x="60" y="232" text-anchor="middle" fill="#5b6a7d" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1">JOY-CON</text>
+                </svg>
+              </div>
+              <div class="panel-tags">
+                <span class="mini-tag">Gyro</span>
+                <span class="mini-tag">Map</span>
+                <span class="mini-tag">ViGEm</span>
+              </div>
             </div>
-            <div class="float-tag float-tag-2">
-              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 11l3 3L22 4l-2-2-8 8-3-3-3 3 3 3zm8 3v6H4V5h6V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-6z"/></svg>
-              <span data-i18n="hero.tag2">AutoLoad</span>
+
+            <!-- DJI Mic panel -->
+            <div class="panel panel-mic">
+              <div class="panel-label"><span class="dot-pulse"></span><span data-i18n="hero.mic">DJI Mic 状态</span></div>
+              <div class="mic-mock">
+                <div class="mic-receiver">
+                  <div class="mic-screen">
+                    <div class="screen-line"><span class="sc-label">RX</span><span class="sc-bar"><i style="width:86%"></i></span><span class="sc-val">86%</span></div>
+                    <div class="screen-line"><span class="sc-label">TX1</span><span class="sc-bar"><i style="width:64%"></i></span><span class="sc-val">64%</span></div>
+                    <div class="screen-line"><span class="sc-label">LVL</span><span class="sc-bar lvl"><i style="width:55%"></i></span><span class="sc-val">-12dB</span></div>
+                  </div>
+                  <div class="mic-screen-grid"></div>
+                </div>
+                <div class="mic-antenna mic-antenna-1"></div>
+                <div class="mic-antenna mic-antenna-2"></div>
+                <div class="mic-brand">DJI MIC 2</div>
+                <div class="mic-link" data-i18n="hero.mic.live">实时连接中</div>
+              </div>
+              <div class="panel-tags">
+                <span class="mini-tag">Battery</span>
+                <span class="mini-tag">Level</span>
+                <span class="mini-tag">Status</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Stats strip -->
-    <section class="stats-strip">
-      <div class="container stats-grid">
-        <div class="stat-item">
-          <div class="stat-value" data-count="4">4</div>
-          <div class="stat-label" data-i18n="stats.devices">手柄系列</div>
+    <!-- Focus strip: the two pillars -->
+    <section class="focus-strip">
+      <div class="container focus-grid">
+        <div class="focus-item reveal">
+          <div class="focus-num">01</div>
+          <div class="focus-body">
+            <h3 data-i18n="focus.joycon.title">Joy-Con 外部映射</h3>
+            <p data-i18n="focus.joycon.desc">作为 PC 的外部输入/映射工具：陀螺仪瞄准、单击双击、多键组合，按设备自动恢复配置。</p>
+          </div>
         </div>
-        <div class="stat-item">
-          <div class="stat-value"><span data-count="1">1</span>×</div>
-          <div class="stat-label" data-i18n="stats.exe">便携 EXE</div>
+        <div class="focus-item reveal">
+          <div class="focus-num">02</div>
+          <div class="focus-body">
+            <h3 data-i18n="focus.mic.title">DJI Mic 实时监视</h3>
+            <p data-i18n="focus.mic.desc">原创绘制的接收器/TX 示意图，实时显示电量、充电、输入电平与连接状态，并支持白名单字段回写。</p>
+          </div>
         </div>
-        <div class="stat-item">
-          <div class="stat-value"><span data-count="2">2</span></div>
-          <div class="stat-label" data-i18n="stats.lang">界面语言</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value"><span data-count="0">0</span></div>
-          <div class="stat-label" data-i18n="stats.install">无需安装</div>
+        <div class="focus-item reveal">
+          <div class="focus-num">03</div>
+          <div class="focus-body">
+            <h3 data-i18n="focus.one.title">一个便携 EXE</h3>
+            <p data-i18n="focus.one.desc">Tauri/Rust 单文件，C++ 核心静态链接进同一进程，免安装即开即用。</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Features -->
+    <!-- JoyCon section -->
+    <section id="joycon" class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker" data-i18n="joycon.kicker">JOY-CON</span>
+          <h2 class="section-title" data-i18n="joycon.title">Joy-Con 外部映射工具</h2>
+          <p class="section-sub" data-i18n="joycon.sub">把任天堂 Joy-Con 变成 PC 上最灵活的无线输入设备。</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <div class="feature-icon"><span>🎯</span></div>
+            <h3 data-i18n="jc1.title">陀螺仪瞄准</h3>
+            <p data-i18n="jc1.desc">按住 ZL 启用陀螺仪鼠标移动，精细/快速灵敏度、加速与低速平滑对应原生参数。</p>
+          </article>
+          <article class="feature-card reveal">
+            <div class="feature-icon"><span>⌨️</span></div>
+            <h3 data-i18n="jc2.title">单击 / 双击 / 多键</h3>
+            <p data-i18n="jc2.desc">单击与双击动作分别映射，支持单键与多键组合快捷键输出。</p>
+          </article>
+          <article class="feature-card reveal">
+            <div class="feature-icon"><span>💾</span></div>
+            <h3 data-i18n="jc3.title">左右 Joy-Con 独立配置</h3>
+            <p data-i18n="jc3.desc">按控制器身份自动保存并恢复映射；有序列号按序列号区分，否则左右侧分别共享。</p>
+          </article>
+          <article class="feature-card reveal">
+            <div class="feature-icon"><span>🔗</span></div>
+            <h3 data-i18n="jc4.title">虚拟手柄 / 键盘输出</h3>
+            <p data-i18n="jc4.desc">SDL3 原生轮询，经 ViGEm 输出 Xbox/DS4 虚拟手柄，或直接模拟键盘鼠标。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- DJI Mic section -->
+    <section id="djimic" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker" data-i18n="mic.kicker">DJI MIC</span>
+          <h2 class="section-title" data-i18n="mic.title">DJI Mic 实时状态监视</h2>
+          <p class="section-sub" data-i18n="mic.sub">零侵入读取接收器状态，不动音频通道，不装额外驱动。</p>
+        </div>
+
+        <div class="mic-feature-row">
+          <div class="mic-feature-visual reveal">
+            <div class="mic-big-mock">
+              <div class="mb-receiver">
+                <div class="mb-screen">
+                  <div class="mb-title">DJI Mic II</div>
+                  <div class="mb-line"><span>RX</span><div class="mb-bar"><i style="width:86%"></i></div><b>86%</b></div>
+                  <div class="mb-line"><span>TX1</span><div class="mb-bar"><i style="width:64%"></i></div><b>64%</b></div>
+                  <div class="mb-line"><span>TX2</span><div class="mb-bar"><i style="width:0%"></i></div><b>--</b></div>
+                  <div class="mb-line"><span>LVL</span><div class="mb-bar lvl"><i style="width:55%"></i></div><b>-12dB</b></div>
+                </div>
+                <div class="mb-antenna a1"></div>
+                <div class="mb-antenna a2"></div>
+                <div class="mb-clip"></div>
+              </div>
+              <div class="mb-badge">
+                <span class="dot-pulse"></span>
+                <span data-i18n="mic.live">接口已连接 · 状态包读取中</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mic-feature-list">
+            <div class="mic-list-item reveal">
+              <div class="mic-list-icon">🔋</div>
+              <div>
+                <h4 data-i18n="mic1.title">接收器与 TX 电量</h4>
+                <p data-i18n="mic1.desc">实时显示接收器、TX1 电量与充电状态，直观的示意图 + 数字。</p>
+              </div>
+            </div>
+            <div class="mic-list-item reveal">
+              <div class="mic-list-icon">📶</div>
+              <div>
+                <h4 data-i18n="mic2.title">输入电平与连接状态</h4>
+                <p data-i18n="mic2.desc">输入电平、TX1 断连/重连、接口被占用自动重试，状态一目了然。</p>
+              </div>
+            </div>
+            <div class="mic-list-item reveal">
+              <div class="mic-list-icon">🛡️</div>
+              <div>
+                <h4 data-i18n="mic3.title">零侵入设计</h4>
+                <p data-i18n="mic3.desc">仅匹配 VID 2CA3 / PID 4011，只读 Interface 6；不动 configuration、不切换 alt setting、不分离驱动，音频通道不受影响。</p>
+              </div>
+            </div>
+            <div class="mic-list-item reveal">
+              <div class="mic-list-icon">🎛️</div>
+              <div>
+                <h4 data-i18n="mic4.title">白名单字段回写</h4>
+                <p data-i18n="mic4.desc">仅对协议有明确命令、取值编码且型号匹配的字段显示控件；界面等待状态包回读确认，不伪造新值。</p>
+              </div>
+            </div>
+            <div class="mic-list-item reveal">
+              <div class="mic-list-icon">📋</div>
+              <div>
+                <h4 data-i18n="mic5.title">完整设备信息</h4>
+                <p data-i18n="mic5.desc">固件、设备名称、录制状态、增益、音色、降噪、低切等真实字段，未读到的值绝不凭空补值。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features (all) -->
     <section id="features" class="section">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker" data-i18n="features.kicker">FEATURES</span>
-          <h2 class="section-title" data-i18n="features.title">核心特性</h2>
+          <h2 class="section-title" data-i18n="features.title">更多特性</h2>
           <p class="section-sub" data-i18n="features.sub">保留 JoyShockMapper 的映射核心与文本配置格式，并提供现代桌面操作界面。</p>
         </div>
 
@@ -163,80 +293,36 @@
             <p data-i18n="f1.desc">借鉴 JoyHarness 的深色手柄控制台：首页直接展示手柄示意图、键位连线与当前映射。</p>
           </article>
           <article class="feature-card reveal">
-            <div class="feature-icon"><span>🖱️</span></div>
-            <h3 data-i18n="f2.title">陀螺仪瞄准</h3>
-            <p data-i18n="f2.desc">按住启用陀螺仪鼠标移动，灵敏度、加速与平滑范围常用调节直接对应原生参数。</p>
-          </article>
-          <article class="feature-card reveal">
-            <div class="feature-icon"><span>⌨️</span></div>
-            <h3 data-i18n="f3.title">单击 / 双击 / 多键</h3>
-            <p data-i18n="f3.desc">单击与双击动作可分别映射，支持单键与多键组合快捷键输出。</p>
-          </article>
-          <article class="feature-card reveal">
-            <div class="feature-icon"><span>💾</span></div>
-            <h3 data-i18n="f4.title">每设备自动恢复</h3>
-            <p data-i18n="f4.desc">根据控制器身份自动保存并恢复映射，换设备即插即用。</p>
-          </article>
-          <article class="feature-card reveal">
             <div class="feature-icon"><span>🌐</span></div>
-            <h3 data-i18n="f5.title">中英文即时切换</h3>
-            <p data-i18n="f5.desc">默认简体中文，右上角一键切换 English / 中文，无需重启。</p>
+            <h3 data-i18n="f2.title">中英文即时切换</h3>
+            <p data-i18n="f2.desc">默认简体中文，右上角一键切换 English / 中文，无需重启。</p>
           </article>
           <article class="feature-card reveal">
             <div class="feature-icon"><span>🖥️</span></div>
-            <h3 data-i18n="f6.title">单文件便携 EXE</h3>
-            <p data-i18n="f6.desc">Tauri/Rust 单可执行文件，C++ 核心静态链接进同一进程，无需安装。</p>
+            <h3 data-i18n="f3.title">单文件便携 EXE</h3>
+            <p data-i18n="f3.desc">Tauri/Rust 单可执行文件，C++ 核心静态链接进同一进程，无需安装。</p>
           </article>
           <article class="feature-card reveal">
             <div class="feature-icon"><span>🧩</span></div>
-            <h3 data-i18n="f7.title">兼容文本配置</h3>
-            <p data-i18n="f7.desc">OnStartup.txt / OnReset.txt / GyroConfigs / AutoLoad 原有工作流保持可用。</p>
+            <h3 data-i18n="f4.title">兼容文本配置</h3>
+            <p data-i18n="f4.desc">OnStartup.txt / OnReset.txt / GyroConfigs / AutoLoad 原有工作流保持可用。</p>
           </article>
           <article class="feature-card reveal">
             <div class="feature-icon"><span>🪟</span></div>
-            <h3 data-i18n="f8.title">托盘与开机自启</h3>
-            <p data-i18n="f8.desc">最小化到系统托盘，映射与陀螺仪后台继续运行；开机自启无需管理员权限。</p>
+            <h3 data-i18n="f5.title">托盘与开机自启</h3>
+            <p data-i18n="f5.desc">最小化到系统托盘，映射与陀螺仪后台继续运行；开机自启无需管理员权限。</p>
           </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Devices -->
-    <section id="devices" class="section section-alt">
-      <div class="container">
-        <div class="section-head">
-          <span class="section-kicker" data-i18n="devices.kicker">DEVICES</span>
-          <h2 class="section-title" data-i18n="devices.title">支持的设备</h2>
-          <p class="section-sub" data-i18n="devices.sub">通过 SDL3 原生轮询，覆盖主流当代手柄。</p>
-        </div>
-
-        <div class="device-grid">
-          <div class="device-card reveal">
-            <div class="device-icon ds">🎯</div>
-            <h3>DualSense</h3>
-            <p>PS5</p>
-          </div>
-          <div class="device-card reveal">
-            <div class="device-icon ds4">🕹️</div>
-            <h3>DualShock 4</h3>
-            <p>PS4</p>
-          </div>
-          <div class="device-card reveal">
-            <div class="device-icon jc">🎀</div>
-            <h3>Joy-Con ×2</h3>
-            <p>Nintendo Switch</p>
-          </div>
-          <div class="device-card reveal">
-            <div class="device-icon pro">🎮</div>
-            <h3>Pro Controller</h3>
-            <p>Nintendo Switch</p>
-          </div>
+          <article class="feature-card reveal">
+            <div class="feature-icon"><span>🔘</span></div>
+            <h3 data-i18n="f6.title">菱形快捷键</h3>
+            <p data-i18n="f6.desc">复制/剪切/粘贴、系统截图、定位输入控件等特殊功能，普通按键由 C++ 实时执行。</p>
+          </article>
         </div>
       </div>
     </section>
 
     <!-- Architecture -->
-    <section id="architecture" class="section">
+    <section id="architecture" class="section section-alt">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker" data-i18n="arch.kicker">ARCHITECTURE</span>
@@ -252,7 +338,7 @@
                 <span class="arch-pct">UI</span>
               </div>
               <h3 data-i18n="arch.ui">界面层</h3>
-              <p data-i18n="arch.ui.desc">窗口、设置、托盘、自启与持久化</p>
+              <p data-i18n="arch.ui.desc">窗口、设置、托盘、自启与持久化 · DJI Mic 状态展示</p>
             </div>
             <div class="arch-arrow">
               <span class="arrow-line"></span>
@@ -264,7 +350,7 @@
                 <span class="arch-pct">CORE</span>
               </div>
               <h3 data-i18n="arch.core">嵌入式核心</h3>
-              <p data-i18n="arch.core.desc">设备轮询 · 实时映射 · 成熟陀螺仪</p>
+              <p data-i18n="arch.core.desc">Joy-Con 轮询 · 实时映射 · 陀螺仪 · DJI Mic 协议解析</p>
             </div>
             <div class="arch-note" data-i18n="arch.note">
               C++ 核心编译为静态库，链接进同一进程 —— 不启动额外后端程序。
@@ -275,7 +361,7 @@
     </section>
 
     <!-- Download -->
-    <section id="download" class="section section-alt">
+    <section id="download" class="section">
       <div class="container">
         <div class="section-head">
           <span class="section-kicker" data-i18n="download.kicker">GET IT</span>
@@ -300,28 +386,6 @@
             <h3 data-i18n="dl.upstream">上游 Releases</h3>
             <p data-i18n="dl.upstream.desc">稳定版与完整命令参考</p>
           </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Build -->
-    <section id="build" class="section">
-      <div class="container">
-        <div class="section-head">
-          <span class="section-kicker" data-i18n="build.kicker">BUILD</span>
-          <h2 class="section-title" data-i18n="build.title">自行构建</h2>
-          <p class="section-sub" data-i18n="build.sub">Windows x64 环境需要 Visual Studio 2022 C++、CMake、Ninja、Node.js 与 Rust。</p>
-        </div>
-
-        <div class="build-block reveal">
-          <div class="code-block">
-            <code>powershell -ExecutionPolicy Bypass -File .\rust\build-portable.ps1</code>
-            <button class="copy-btn" data-copy="powershell -ExecutionPolicy Bypass -File .\rust\build-portable.ps1">
-              <span class="copy-icon">⧉</span>
-              <span class="copy-text" data-i18n="build.copy">复制</span>
-            </button>
-          </div>
-          <p class="build-note" data-i18n="build.note">构建结果写入仓库根目录 JoyShockMapper.exe，同时生成 out/portable/JoyShockMapper.exe 供 CI 与发行打包。</p>
         </div>
       </div>
     </section>
