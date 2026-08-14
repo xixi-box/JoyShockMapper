@@ -123,13 +123,16 @@ jobs:
           GHCR_SITE_IMAGE="$GHCR_REGISTRY/$GHCR_IMAGE_NAME-site"
           ACR_SITE_IMAGE="$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_IMAGE_NAME"
 
-          if docker pull "$GHCR_SITE_IMAGE:$GITHUB_SHA"; then
+          if docker pull "$ACR_SITE_IMAGE:latest"; then
+            SITE_IMAGE="$ACR_SITE_IMAGE:latest"
+          elif docker pull "$GHCR_SITE_IMAGE:$GITHUB_SHA"; then
+            echo "ACR pull failed; using GHCR fallback."
             SITE_IMAGE="$GHCR_SITE_IMAGE:$GITHUB_SHA"
           elif docker pull "$ACR_SITE_IMAGE:$GITHUB_SHA"; then
-            echo "GHCR pull failed; using Aliyun ACR fallback."
+            echo "ACR SHA tag pull failed; using ACR fallback."
             SITE_IMAGE="$ACR_SITE_IMAGE:$GITHUB_SHA"
           else
-            echo "Unable to pull image $GITHUB_SHA from GHCR or Aliyun ACR." >&2
+            echo "Unable to pull site image from ACR or GHCR." >&2
             exit 1
           fi
 
