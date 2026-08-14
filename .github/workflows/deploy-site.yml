@@ -34,7 +34,7 @@ permissions:
 
 env:
   GHCR_REGISTRY: ghcr.io
-  GHCR_IMAGE_NAME: ${{ github.repository }}
+  GHCR_IMAGE_NAME: ${{ format('{0}/{1}', github.repository_owner, lower(github.event.repository.name)) }}
   ALIYUN_ACR_REGISTRY: ${{ vars.ALIYUN_ACR_REGISTRY }}
   ALIYUN_ACR_USERNAME: ${{ vars.ALIYUN_ACR_USERNAME }}
   ALIYUN_ACR_IMAGE_NAME: ${{ vars.JSM_IMAGE_NAME || 'wangshun_build/joy-shock-mapper' }}
