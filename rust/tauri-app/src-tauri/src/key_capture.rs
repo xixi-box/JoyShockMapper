@@ -31,6 +31,14 @@ use windows_sys::Win32::{
 static SENDER: Mutex<Option<Sender<CapturedKey>>> = Mutex::new(None);
 static HOOK_THREAD_ID: Mutex<Option<u32>> = Mutex::new(None);
 
+fn log(message: &str) {
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::path::Path::new(&std::env::var_os("LOCALAPPDATA").map_or_else(|| ".".into(), |p| std::path::PathBuf::from(p).join("JoyShockMapper"))).join("key-capture.log"))
+        .map(|mut file| { use std::io::Write; let _ = writeln!(file, "{} {message}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)); });
+}
+
 #[derive(Clone, serde::Serialize)]
 struct CapturedKey {
     kind: &'static str,
@@ -42,6 +50,7 @@ struct CapturedKey {
 pub fn start(app: AppHandle) -> Result<(), String> {
     let mut slot = SENDER.lock().map_err(|error| error.to_string())?;
     if slot.is_some() {
+        log("start: already capturing");
         return Ok(());
     }
 
@@ -57,9 +66,11 @@ pub fn start(app: AppHandle) -> Result<(), String> {
             SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), GetModuleHandleW(std::ptr::null()), 0)
         };
         if hook.is_null() {
+            log("hook install FAILED (null)");
             let _ = SENDER.lock().map(|mut slot| *slot = None);
             return;
         }
+        log("hook installed OK");
         let thread_id = unsafe { GetCurrentThreadId() };
         let _ = HOOK_THREAD_ID.lock().map(|mut slot| *slot = Some(thread_id));
 
@@ -70,6 +81,7 @@ pub fn start(app: AppHandle) -> Result<(), String> {
                 DispatchMessageW(&message);
             }
         }
+        log("message loop exited; unhooking");
         unsafe { UnhookWindowsHookEx(hook) };
         let _ = HOOK_THREAD_ID.lock().map(|mut slot| *slot = None);
     });
@@ -104,6 +116,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: WPARAM, l_param: LPA
     };
     let info = unsafe { &*(l_param as *const KBDLLHOOKSTRUCT) };
     if let Some(key) = virtual_key_name(info.vkCode as u16) {
+        log(&format!("key {} vk={}", key, info.vkCode));
         if let Ok(slot) = SENDER.lock() {
             if let Some(sender) = slot.as_ref() {
                 let _ = sender.send(CapturedKey {

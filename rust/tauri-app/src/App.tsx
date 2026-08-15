@@ -341,7 +341,7 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
       <button onClick={() => { onCommit('"UI_ACTION COPY_ALL"'); setActionsOpen(false); }}>{zh ? "复制输入框全部文字" : "Copy all input text"}</button>
       <button onClick={() => { onCommit('"UI_ACTION CUT_ALL"'); setActionsOpen(false); }}>{zh ? "剪切输入框全部文字" : "Cut all input text"}</button>
       <button onClick={() => { onCommit("LCONTROL\\ V\\"); setActionsOpen(false); }}>{zh ? "粘贴" : "Paste"}</button>
-      <button onClick={() => { onCommit("LWINDOWS\\ LSHIFT\\ S\\"); setActionsOpen(false); }}>{zh ? "系统截图" : "Screenshot"}</button>
+      <button onClick={() => { onCommit('"UI_ACTION SCREENSHOT"'); setActionsOpen(false); }}>{zh ? "系统截图" : "Screenshot"}</button>
       <hr/>
       <b>{zh ? "聚焦当前软件的输入位置" : "Focus input in the current app"}</b>
       <small className="actionHint">{zh ? "触发时对正在使用的软件发送快捷键，不需要填写路径。" : "Sends a shortcut to the app you are using; no path required."}</small>
