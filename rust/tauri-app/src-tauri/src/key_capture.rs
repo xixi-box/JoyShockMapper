@@ -2,6 +2,7 @@ use std::{
     mem,
     sync::{
         Mutex,
+        atomic::{AtomicU64, Ordering},
         mpsc::{self, Sender},
     },
 };
@@ -9,7 +10,7 @@ use std::{
 use tauri::{AppHandle, Emitter};
 use windows_sys::Win32::{
     Foundation::{LPARAM, LRESULT, WPARAM},
-    System::Threading::GetCurrentThreadId,
+    System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
     UI::{
         Input::KeyboardAndMouse::{
             VK_ADD, VK_BACK, VK_CAPITAL, VK_DECIMAL, VK_DELETE, VK_DIVIDE, VK_DOWN, VK_END,
@@ -31,13 +32,23 @@ use windows_sys::Win32::{
 
 static SENDER: Mutex<Option<Sender<CapturedKey>>> = Mutex::new(None);
 static HOOK_THREAD_ID: Mutex<Option<u32>> = Mutex::new(None);
+static CALL_COUNT: AtomicU64 = AtomicU64::new(0);
+static WIN_COUNT: AtomicU64 = AtomicU64::new(0);
+static LAST_VK: AtomicU64 = AtomicU64::new(0);
 
 fn log(message: &str) {
+    let dir = std::env::var_os("LOCALAPPDATA")
+        .map(|p| std::path::PathBuf::from(p).join("JoyShockMapper"))
+        .unwrap_or_else(|| ".".into());
     let _ = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(std::path::Path::new(&std::env::var_os("LOCALAPPDATA").map_or_else(|| ".".into(), |p| std::path::PathBuf::from(p).join("JoyShockMapper"))).join("key-capture.log"))
-        .map(|mut file| { use std::io::Write; let _ = writeln!(file, "{} {message}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)); });
+        .open(dir.join("key-capture.log"))
+        .map(|mut file| {
+            use std::io::Write;
+            let _ = writeln!(file, "{} {message}", std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
+        });
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -46,33 +57,30 @@ struct CapturedKey {
     key: String,
 }
 
-/// Begin capturing keyboard input at the OS level so system-reserved
-/// combinations (e.g. Win+Shift+S) are recorded before the shell sees them.
 pub fn start(app: AppHandle) -> Result<(), String> {
     let mut slot = SENDER.lock().map_err(|error| error.to_string())?;
     if slot.is_some() {
-        log("start: already capturing");
         return Ok(());
     }
 
     let (sender, receiver) = mpsc::channel::<CapturedKey>();
     *slot = Some(sender);
     drop(slot);
+    CALL_COUNT.store(0, Ordering::SeqCst);
+    WIN_COUNT.store(0, Ordering::SeqCst);
+    LAST_VK.store(0, Ordering::SeqCst);
 
-    // Dedicated thread owns the low-level hook and pumps its message queue.
-    // A low-level keyboard hook only receives callbacks while the installing
-    // thread runs a message loop. The thread must first create its message
-    // queue (via a PeekMessage) BEFORE installing the hook, otherwise the
-    // system cannot deliver hook callbacks to it.
     std::thread::spawn(move || {
+        // Create the thread message queue before installing the hook so the
+        // system can deliver low-level hook callbacks to this thread.
         let mut message = unsafe { mem::zeroed::<MSG>() };
         unsafe { PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_NOREMOVE) };
 
         let hook = unsafe {
-            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), std::ptr::null_mut(), 0)
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), GetModuleHandleW(std::ptr::null()), 0)
         };
         if hook.is_null() {
-            log("hook install FAILED (null)");
+            log("hook install FAILED");
             let _ = SENDER.lock().map(|mut slot| *slot = None);
             return;
         }
@@ -86,8 +94,12 @@ pub fn start(app: AppHandle) -> Result<(), String> {
                 DispatchMessageW(&message);
             }
         }
-        log("message loop exited; unhooking");
+        log(&format!("loop exit calls={} win={} lastVk={}",
+            CALL_COUNT.load(Ordering::SeqCst),
+            WIN_COUNT.load(Ordering::SeqCst),
+            LAST_VK.load(Ordering::SeqCst)));
         unsafe { UnhookWindowsHookEx(hook) };
+        let _ = SENDER.lock().map(|mut slot| *slot = None);
         let _ = HOOK_THREAD_ID.lock().map(|mut slot| *slot = None);
     });
 
@@ -120,6 +132,11 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: WPARAM, l_param: LPA
         _ => return unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) },
     };
     let info = unsafe { &*(l_param as *const KBDLLHOOKSTRUCT) };
+    CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+    LAST_VK.store(info.vkCode as u64, Ordering::SeqCst);
+    if info.vkCode as u16 == VK_LWIN || info.vkCode as u16 == VK_RWIN {
+        WIN_COUNT.fetch_add(1, Ordering::SeqCst);
+    }
     if let Some(key) = virtual_key_name(info.vkCode as u16) {
         if let Ok(slot) = SENDER.lock() {
             if let Some(sender) = slot.as_ref() {
@@ -129,8 +146,6 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: WPARAM, l_param: LPA
                 });
             }
         }
-        // Swallow the event so the system shortcut (e.g. Win+Shift+S) does not
-        // fire while a mapping is being recorded.
         return 1;
     }
     unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) }
