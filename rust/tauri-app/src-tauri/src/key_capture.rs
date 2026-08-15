@@ -9,7 +9,7 @@ use std::{
 use tauri::{AppHandle, Emitter};
 use windows_sys::Win32::{
     Foundation::{LPARAM, LRESULT, WPARAM},
-    System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
+    System::Threading::GetCurrentThreadId,
     UI::{
         Input::KeyboardAndMouse::{
             VK_ADD, VK_BACK, VK_CAPITAL, VK_DECIMAL, VK_DELETE, VK_DIVIDE, VK_DOWN, VK_END,
@@ -21,9 +21,10 @@ use windows_sys::Win32::{
             VK_SUBTRACT, VK_TAB, VK_UP, VK_VOLUME_DOWN, VK_VOLUME_MUTE, VK_VOLUME_UP,
         },
         WindowsAndMessaging::{
-            CallNextHookEx, DispatchMessageW, GetMessageW, KBDLLHOOKSTRUCT, PostThreadMessageW,
-            SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, MSG, WH_KEYBOARD_LL,
-            WM_KEYDOWN, WM_KEYUP, WM_QUIT, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            CallNextHookEx, DispatchMessageW, GetMessageW, KBDLLHOOKSTRUCT, PM_NOREMOVE,
+            PeekMessageW, PostThreadMessageW, SetWindowsHookExW, TranslateMessage,
+            UnhookWindowsHookEx, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_QUIT, WM_SYSKEYDOWN,
+            WM_SYSKEYUP,
         },
     },
 };
@@ -60,10 +61,15 @@ pub fn start(app: AppHandle) -> Result<(), String> {
 
     // Dedicated thread owns the low-level hook and pumps its message queue.
     // A low-level keyboard hook only receives callbacks while the installing
-    // thread runs a message loop.
+    // thread runs a message loop. The thread must first create its message
+    // queue (via a PeekMessage) BEFORE installing the hook, otherwise the
+    // system cannot deliver hook callbacks to it.
     std::thread::spawn(move || {
+        let mut message = unsafe { mem::zeroed::<MSG>() };
+        unsafe { PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_NOREMOVE) };
+
         let hook = unsafe {
-            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), GetModuleHandleW(std::ptr::null()), 0)
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), std::ptr::null_mut(), 0)
         };
         if hook.is_null() {
             log("hook install FAILED (null)");
@@ -74,7 +80,6 @@ pub fn start(app: AppHandle) -> Result<(), String> {
         let thread_id = unsafe { GetCurrentThreadId() };
         let _ = HOOK_THREAD_ID.lock().map(|mut slot| *slot = Some(thread_id));
 
-        let mut message = unsafe { mem::zeroed::<MSG>() };
         while unsafe { GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) } > 0 {
             unsafe {
                 TranslateMessage(&message);
