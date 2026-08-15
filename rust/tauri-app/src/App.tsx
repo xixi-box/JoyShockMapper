@@ -265,13 +265,16 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   const held = useRef(new Set<string>());
   const captured = useRef<string[]>([]);
   const recordingRef = useRef(false);
+  const hookActiveRef = useRef(false);
   const activationMouse = useRef<number | null>(null);
   const finishTimer = useRef<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [draft, setDraft] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const cancelTimer = () => { if (finishTimer.current != null) { globalThis.clearTimeout(finishTimer.current); finishTimer.current = null; } };
-  const begin = () => { cancelTimer(); held.current.clear(); captured.current = []; setDraft(""); recordingRef.current = true; setRecording(true); void invoke("start_key_capture"); };
+  const startHook = () => { if (!hookActiveRef.current) { hookActiveRef.current = true; void invoke("start_key_capture"); } };
+  const stopHook = () => { if (hookActiveRef.current) { hookActiveRef.current = false; void invoke("stop_key_capture"); } };
+  const begin = () => { cancelTimer(); held.current.clear(); captured.current = []; setDraft(""); recordingRef.current = true; setRecording(true); startHook(); };
   const capture = (name: string | null) => {
     if (!name || captured.current.includes(name)) return;
     captured.current.push(name);
@@ -279,7 +282,7 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   };
   const finish = () => {
     cancelTimer();
-    void invoke("stop_key_capture");
+    stopHook();
     if (captured.current.length) onCommit(chordCommand(captured.current));
     recordingRef.current = false;
     setRecording(false);
@@ -290,6 +293,7 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
     if (!captured.current.length) return;
     finishTimer.current = globalThis.setTimeout(finish, 280);
   };
+  useEffect(() => () => stopHook(), []);
   useEffect(() => {
     if (!recording) return;
     let unlisten: (() => void) | undefined;
@@ -324,7 +328,6 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
     window.addEventListener("mousedown", mouseDown, true); window.addEventListener("mouseup", mouseUp, true);
     window.addEventListener("wheel", wheel, { capture: true, passive: false });
     return () => {
-      void invoke("stop_key_capture");
       unlisten?.();
       window.removeEventListener("mousedown", mouseDown, true); window.removeEventListener("mouseup", mouseUp, true);
       window.removeEventListener("wheel", wheel, true); cancelTimer();

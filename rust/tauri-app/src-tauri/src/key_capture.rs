@@ -120,9 +120,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: WPARAM, l_param: LPA
         _ => return unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) },
     };
     let info = unsafe { &*(l_param as *const KBDLLHOOKSTRUCT) };
-    log(&format!("raw vk={} scan={} up={}", info.vkCode, info.scanCode, key_up));
     if let Some(key) = virtual_key_name(info.vkCode as u16) {
-        log(&format!("key {} vk={}", key, info.vkCode));
         if let Ok(slot) = SENDER.lock() {
             if let Some(sender) = slot.as_ref() {
                 let _ = sender.send(CapturedKey {
