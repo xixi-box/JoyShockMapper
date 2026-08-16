@@ -303,6 +303,7 @@ pub fn run() {
 			#[cfg(windows)]
 			{
 				special_actions::start();
+				special_actions::self_test();
 				let core = embedded_core::EmbeddedCore::default();
 				let data_dir = app.path().app_data_dir()?.join("core");
 				prepare_core_directory(&data_dir)?;

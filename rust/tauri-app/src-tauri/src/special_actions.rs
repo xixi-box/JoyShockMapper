@@ -49,6 +49,19 @@ pub fn start() {
     });
 }
 
+/// Invoked once at startup to verify the screenshot launcher itself works,
+/// independent of the C++ action-callback path.
+pub fn self_test() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        if let Err(error) = screenshot() {
+            log_action(&format!("screenshot self-test failed: {error}"));
+        } else {
+            log_action("screenshot self-test OK");
+        }
+    });
+}
+
 pub fn launch_focus_command(path: &str, shortcut: &str) -> Result<String, String> {
     let executable = Path::new(path);
     if !executable.is_file() || !executable.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("exe")) {
