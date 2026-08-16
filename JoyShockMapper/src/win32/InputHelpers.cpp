@@ -1,5 +1,6 @@
 #include "InputHelpers.h"
 #include <thread>
+#include <fstream>
 
 #include <unordered_map>
 
@@ -9,6 +10,7 @@ static float accumulatedY = 0;
 #ifdef JSM_EMBEDDED_CORE
 extern "C" void jsm_core_record_mouse_event(float x, float y);
 extern "C" void jsm_core_record_key_event();
+extern "C" void jsm_core_submit_command(const char *command);
 #endif
 
 // Windows' mouse speed settings translate non-linearly to speed.
@@ -113,7 +115,8 @@ bool isNumLockKey(KeyCode key)
 
 bool isExtendedKey(KeyCode key)
 {
-	return ((key.code >= VK_PRIOR && key.code <= VK_HELP) && key.code != VK_SNAPSHOT) ||
+	return key.code == VK_RCONTROL || key.code == VK_RMENU ||
+		((key.code >= VK_PRIOR && key.code <= VK_HELP) && key.code != VK_SNAPSHOT) ||
 		(key.code >= VK_LWIN && key.code <= VK_DIVIDE) ||
 		(key.code >= VK_BROWSER_BACK && key.code <= VK_LAUNCH_APP2);
 }
@@ -193,6 +196,16 @@ void setMouseNorm(float x, float y)
 
 BOOL WriteToConsole(string_view command)
 {
+	#ifdef JSM_EMBEDDED_CORE
+	{
+		ofstream dbg;
+		dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
+		dbg << "WriteToConsole: [" << command << "]\n";
+	}
+	string copy(command);
+	jsm_core_submit_command(copy.c_str());
+	return TRUE;
+	#else
 	static const INPUT_RECORD ESC_DOWN = { KEY_EVENT, { TRUE, 1, VK_ESCAPE, WORD(MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC)), VK_ESCAPE, 0 } };
 	static const INPUT_RECORD ESC_UP = { KEY_EVENT, { FALSE, 1, VK_ESCAPE, WORD(MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC)), VK_ESCAPE, 0 } };
 	static const INPUT_RECORD RET_DOWN = { KEY_EVENT, { TRUE, 1, VK_RETURN, WORD(MapVirtualKey(VK_RETURN, MAPVK_VK_TO_VSC)), VK_RETURN, 0 } };
@@ -229,6 +242,7 @@ BOOL WriteToConsole(string_view command)
 	}
 	FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
 	return written == inputs.size();
+	#endif
 }
 
 BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType)
