@@ -185,11 +185,6 @@ bool CmdRegistry::isCommandValid(string_view line) const
 void CmdRegistry::processLine(const string& line)
 {
 	auto trimmedLine = string{ strtrim(line) };
-	{
-		ofstream dbg;
-		dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
-		dbg << "processLine: [" << trimmedLine << "]\n";
-	}
 
 	if (!trimmedLine.empty() && trimmedLine.front() != '#' && !loadConfigFile(trimmedLine))
 	{

@@ -1,6 +1,5 @@
 #include "InputHelpers.h"
 #include <thread>
-#include <fstream>
 
 #include <unordered_map>
 
@@ -197,11 +196,6 @@ void setMouseNorm(float x, float y)
 BOOL WriteToConsole(string_view command)
 {
 	#ifdef JSM_EMBEDDED_CORE
-	{
-		ofstream dbg;
-		dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
-		dbg << "WriteToConsole: [" << command << "]\n";
-	}
 	string copy(command);
 	jsm_core_submit_command(copy.c_str());
 	return TRUE;

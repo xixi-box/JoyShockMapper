@@ -24,40 +24,20 @@ unsafe extern "C" {
 unsafe extern "C" fn receive_action(value: *const std::ffi::c_char) {
     if value.is_null() { return; }
     let action = unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned();
-    log_action(&format!("received action: {action}"));
     if let Some(sender) = ACTIONS.get() {
         let _ = sender.send(action);
-    } else {
-        log_action("ACTIONS not initialized");
     }
 }
 
 pub fn start() {
     let (sender, receiver) = mpsc::channel();
-    if ACTIONS.set(sender).is_err() {
-        log_action("special_actions::start already initialized");
-        return;
-    }
+    if ACTIONS.set(sender).is_err() { return; }
     unsafe { jsm_core_set_action_callback(receive_action) };
-    log_action("special_actions::start OK, callback registered");
     std::thread::spawn(move || {
         while let Ok(action) = receiver.recv() {
             if let Err(error) = execute(&action) {
-                log_action(&format!("execute failed: {error}"));
+                eprintln!("special action failed: {error}");
             }
-        }
-    });
-}
-
-/// Invoked once at startup to verify the screenshot launcher itself works,
-/// independent of the C++ action-callback path.
-pub fn self_test() {
-    std::thread::spawn(|| {
-        std::thread::sleep(std::time::Duration::from_millis(2500));
-        if let Err(error) = screenshot() {
-            log_action(&format!("screenshot self-test failed: {error}"));
-        } else {
-            log_action("screenshot self-test OK");
         }
     });
 }
@@ -144,9 +124,8 @@ unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -
 }
 
 fn screenshot() -> Result<(), String> {
-    log_action("screenshot invoked");
     // Try the modern URI scheme first (Snip & Sketch), then the legacy
-    // SnippingTool.exe, then explorer as a last resort.
+    // SnippingTool.exe as a fallback.
     let attempts: Vec<(&str, &str)> = vec![
         ("open", "ms-screenclip:"),
         ("open", "C:\\Windows\\System32\\SnippingTool.exe"),
@@ -156,21 +135,11 @@ fn screenshot() -> Result<(), String> {
         let op = wide(operation);
         let tgt = wide(target);
         let result = unsafe { ShellExecuteW(std::ptr::null_mut(), op.as_ptr(), tgt.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
-        log_action(&format!("ShellExecuteW({target}) -> {}", result as isize));
         if result as isize > 32 {
             return Ok(());
         }
     }
     Err("无法启动截图工具".into())
-}
-
-fn log_action(message: &str) {
-    let dir = std::env::var_os("LOCALAPPDATA")
-        .map(|p| std::path::PathBuf::from(p).join("JoyShockMapper"))
-        .unwrap_or_else(|| ".".into());
-    let _ = std::fs::OpenOptions::new().create(true).append(true)
-        .open(dir.join("key-capture.log"))
-        .map(|mut file| { use std::io::Write; let _ = writeln!(file, "[action] {message}"); });
 }
 
 fn wide(value: &str) -> Vec<u16> {

@@ -3128,11 +3128,6 @@ int main(int argc, char *argv[])
 	#ifdef JSM_EMBEDDED_CORE
 	commandRegistry.add((new JSMMacro("UI_ACTION"))->SetMacro([](JSMMacro *, string_view arguments)
 		{
-			{
-				ofstream dbg;
-				dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
-				dbg << "UI_ACTION macro fired, args=[" << arguments << "] callback=" << (embedded_action_callback.load() ? "set" : "null") << "\n";
-			}
 			auto callback = embedded_action_callback.load();
 			if (!callback || arguments.empty())
 				return false;
