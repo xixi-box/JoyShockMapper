@@ -53,9 +53,25 @@ static condition_variable embedded_command_cv;
 static queue<string> embedded_commands;
 static atomic_int embedded_device_count = 0;
 static atomic_int embedded_device_mask = 0;
+static atomic_bool embedded_core_ready = false;
+static atomic_bool embedded_attach_virtual_on_startup = false;
+static mutex embedded_profile_directory_mutex;
+static string embedded_profile_directory_override;
+static atomic_uint64_t embedded_left_profile_hash = 0;
+static atomic_uint64_t embedded_right_profile_hash = 0;
+static atomic_uint64_t embedded_full_profile_hash = 0;
 static atomic_int embedded_simulated_buttons = 0;
 static atomic_int embedded_mouse_event_count = 0;
 static atomic_int embedded_key_event_count = 0;
+static atomic<float> embedded_gyro_x = 0.f;
+static atomic<float> embedded_gyro_y = 0.f;
+static atomic<float> embedded_gyro_output_x = 0.f;
+static atomic<float> embedded_gyro_output_y = 0.f;
+static atomic_int embedded_gyro_active = 0;
+static atomic_uint64_t embedded_gyro_sample_count = 0;
+using EmbeddedActionCallback = void (*)(const char *);
+static atomic<EmbeddedActionCallback> embedded_action_callback = nullptr;
+extern "C" int jsm_core_attach_virtual_controller();
 
 extern "C" __declspec(dllexport) int jsm_core_device_count()
 {
@@ -65,6 +81,19 @@ extern "C" __declspec(dllexport) int jsm_core_device_count()
 extern "C" __declspec(dllexport) int jsm_core_device_mask()
 {
 	return embedded_device_mask.load();
+}
+extern "C" __declspec(dllexport) bool jsm_core_ready() { return embedded_core_ready.load(); }
+extern "C" __declspec(dllexport) void jsm_core_set_startup_virtual_controller(bool enabled) { embedded_attach_virtual_on_startup.store(enabled); }
+extern "C" __declspec(dllexport) void jsm_core_set_profile_directory(const char *directory)
+{
+	lock_guard guard(embedded_profile_directory_mutex);
+	embedded_profile_directory_override = directory ? directory : "";
+}
+extern "C" __declspec(dllexport) uint64_t jsm_core_active_profile_hash(int split_type)
+{
+	return split_type == JS_SPLIT_TYPE_LEFT ? embedded_left_profile_hash.load() :
+	       split_type == JS_SPLIT_TYPE_RIGHT ? embedded_right_profile_hash.load() :
+	       embedded_full_profile_hash.load();
 }
 
 extern "C" __declspec(dllexport) void jsm_core_set_simulated_buttons(int buttons)
@@ -90,6 +119,41 @@ extern "C" __declspec(dllexport) void jsm_core_record_key_event()
 
 extern "C" __declspec(dllexport) int jsm_core_mouse_event_count() { return embedded_mouse_event_count.load(); }
 extern "C" __declspec(dllexport) int jsm_core_key_event_count() { return embedded_key_event_count.load(); }
+extern "C" __declspec(dllexport) float jsm_core_gyro_x() { return embedded_gyro_x.load(); }
+extern "C" __declspec(dllexport) float jsm_core_gyro_y() { return embedded_gyro_y.load(); }
+extern "C" __declspec(dllexport) float jsm_core_gyro_output_x() { return embedded_gyro_output_x.load(); }
+extern "C" __declspec(dllexport) float jsm_core_gyro_output_y() { return embedded_gyro_output_y.load(); }
+extern "C" __declspec(dllexport) int jsm_core_gyro_active() { return embedded_gyro_active.load(); }
+extern "C" __declspec(dllexport) uint64_t jsm_core_gyro_sample_count() { return embedded_gyro_sample_count.load(); }
+extern "C" __declspec(dllexport) bool jsm_core_validate_mapping(const char *command)
+{
+	if (!command || !*command)
+		return false;
+	try
+	{
+		return Mapping(command).isValid();
+	}
+	catch (...)
+	{
+		return false;
+	}
+}
+extern "C" __declspec(dllexport) bool jsm_core_mapping_matches(const char *button, const char *command)
+{
+	if (!button || !command)
+		return false;
+	for (auto &mapping : mappings)
+	{
+		if (mapping.getName() == button)
+			return mapping.value().command() == command;
+	}
+	return false;
+}
+
+extern "C" __declspec(dllexport) void jsm_core_set_action_callback(EmbeddedActionCallback callback)
+{
+	embedded_action_callback.store(callback);
+}
 
 static uint64_t embeddedProfileHash(string_view value)
 {
@@ -109,10 +173,25 @@ extern "C" __declspec(dllexport) void jsm_core_load_device_profile(const char *i
 	string key = split_type == JS_SPLIT_TYPE_LEFT ? "left|" : split_type == JS_SPLIT_TYPE_RIGHT ? "right|" : "full|";
 	key += identity;
 	stringstream filename;
-	filename << "device_" << hex << setw(16) << setfill('0') << embeddedProfileHash(key) << ".jsmprofile";
-	const char *localAppData = getenv("LOCALAPPDATA");
-	filesystem::path root = localAppData && *localAppData ? filesystem::path(localAppData) : filesystem::temp_directory_path();
-	filesystem::path directory = root / "JoyShockMapper" / "devices";
+	uint64_t profileHash = embeddedProfileHash(key);
+	if (split_type == JS_SPLIT_TYPE_LEFT)
+		embedded_left_profile_hash.store(profileHash);
+	else if (split_type == JS_SPLIT_TYPE_RIGHT)
+		embedded_right_profile_hash.store(profileHash);
+	else
+		embedded_full_profile_hash.store(profileHash);
+	filename << "device_" << hex << setw(16) << setfill('0') << profileHash << ".jsmprofile";
+	filesystem::path directory;
+	{
+		lock_guard guard(embedded_profile_directory_mutex);
+		directory = embedded_profile_directory_override;
+	}
+	if (directory.empty())
+	{
+		const char *localAppData = getenv("LOCALAPPDATA");
+		filesystem::path root = localAppData && *localAppData ? filesystem::path(localAppData) : filesystem::temp_directory_path();
+		directory = root / "JoyShockMapper" / "devices";
+	}
 	error_code error;
 	filesystem::create_directories(directory, error);
 	filesystem::path profile = directory / filename.str();
@@ -121,7 +200,21 @@ extern "C" __declspec(dllexport) void jsm_core_load_device_profile(const char *i
 		ofstream output(profile);
 		output << "# JoyShockMapper automatic device profile\n";
 	}
-	commandRegistry.loadConfigFile(profile.string());
+	// .jsmprofile uses the GUI's compact "input<TAB>mapping" format, not
+	// ordinary JSM script syntax. Feeding it to loadConfigFile opens the file
+	// successfully but silently rejects every mapping because the '=' token is
+	// absent. Translate each profile row into a normal assignment instead.
+	ifstream input(profile);
+	string line;
+	while (getline(input, line))
+	{
+		if (line.empty() || line.front() == '#')
+			continue;
+		auto separator = line.find('\t');
+		if (separator == string::npos || separator == 0 || separator + 1 >= line.size())
+			continue;
+		commandRegistry.processLine(line.substr(0, separator) + " = " + line.substr(separator + 1));
+	}
 }
 
 extern "C" __declspec(dllexport) void jsm_core_submit_command(const char *command)
@@ -951,6 +1044,15 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 	gyroXVelocity *= lowSensXY.first * (1.0f - newSensitivity) + hiSensXY.first * newSensitivity;
 	gyroYVelocity *= lowSensXY.second * (1.0f - newSensitivity) + hiSensXY.second * newSensitivity;
 
+	#ifdef JSM_EMBEDDED_CORE
+	embedded_gyro_x.store(gyroX);
+	embedded_gyro_y.store(gyroY);
+	embedded_gyro_output_x.store(gyroXVelocity);
+	embedded_gyro_output_y.store(gyroYVelocity);
+	embedded_gyro_active.store(blockGyro ? 0 : 1);
+	embedded_gyro_sample_count.fetch_add(1);
+	#endif
+
 	jc->gyroXVelocity = gyroXVelocity;
 	jc->gyroYVelocity = gyroYVelocity;
 
@@ -1244,6 +1346,11 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 void connectDevices(bool mergeJoycons = true)
 {
 	handle_to_joyshock.clear();
+	#ifdef JSM_EMBEDDED_CORE
+	embedded_left_profile_hash.store(0);
+	embedded_right_profile_hash.store(0);
+	embedded_full_profile_hash.store(0);
+	#endif
 	this_thread::sleep_for(100ms);
 	int numConnected = jsl->ConnectDevices();
 	int deviceMask = 0;
@@ -1675,6 +1782,9 @@ void cleanUp()
 	#ifdef JSM_EMBEDDED_CORE
 	embedded_device_count.store(0);
 	embedded_device_mask.store(0);
+	embedded_left_profile_hash.store(0);
+	embedded_right_profile_hash.store(0);
+	embedded_full_profile_hash.store(0);
 	#endif
 }
 
@@ -2885,6 +2995,7 @@ void initJsmSettings(CmdRegistry *commandRegistry)
 #ifdef JSM_EMBEDDED_CORE
 extern "C" __declspec(dllexport) int jsm_core_run(const char *working_directory)
 {
+	embedded_core_ready.store(false);
 	void *trayIconData = nullptr;
 	int argc = 0;
 	string module;
@@ -3014,6 +3125,22 @@ int main(int argc, char *argv[])
 	commandRegistry.add((new JSMMacro("WHITELIST_SHOW"))->SetMacro(bind(&do_WHITELIST_SHOW))->setHelp("Open the whitelister application"));
 	commandRegistry.add((new JSMMacro("WHITELIST_ADD"))->SetMacro(bind(&do_WHITELIST_ADD))->setHelp("Add JoyShockMapper to the whitelisted applications."));
 	commandRegistry.add((new JSMMacro("WHITELIST_REMOVE"))->SetMacro(bind(&do_WHITELIST_REMOVE))->setHelp("Remove JoyShockMapper from whitelisted applications."));
+	#ifdef JSM_EMBEDDED_CORE
+	commandRegistry.add((new JSMMacro("UI_ACTION"))->SetMacro([](JSMMacro *, string_view arguments)
+		{
+			{
+				ofstream dbg;
+				dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
+				dbg << "UI_ACTION macro fired, args=[" << arguments << "] callback=" << (embedded_action_callback.load() ? "set" : "null") << "\n";
+			}
+			auto callback = embedded_action_callback.load();
+			if (!callback || arguments.empty())
+				return false;
+			string action(arguments);
+			callback(action.c_str());
+			return true;
+		})->setHelp("Dispatch a structured desktop action to the embedded user interface."));
+	#endif
 	commandRegistry.add(new HelpCmd(commandRegistry));
 	commandRegistry.add((new JSMMacro("CLEAR"))->SetMacro(bind(&ClearConsole))->setHelp("Removes all text in the console screen"));
 	commandRegistry.add((new JSMMacro("CALIBRATE_TRIGGERS"))->SetMacro([](JSMMacro *, string_view)
@@ -3034,9 +3161,6 @@ int main(int argc, char *argv[])
 
 	Mapping::_isCommandValid = bind(&CmdRegistry::isCommandValid, &commandRegistry, placeholders::_1);
 
-	connectDevices();
-	jsl->SetCallback(&joyShockPollCallback);
-	jsl->SetTouchCallback(&touchCallback);
 	#ifndef JSM_EMBEDDED_CORE
 	tray.reset(TrayIcon::getNew(trayIconData, &beforeShowTrayMenu));
 	if (tray)
@@ -3057,6 +3181,17 @@ int main(int argc, char *argv[])
 		COUT << " file to load.\n";
 	}
 
+	// Device profiles must be loaded after OnReset/OnStartup. Loading connected
+	// devices first caused their persisted mappings to be immediately erased by
+	// do_RESET_MAPPINGS on every application restart.
+	#ifdef JSM_EMBEDDED_CORE
+	if (embedded_attach_virtual_on_startup.load())
+		jsm_core_attach_virtual_controller();
+	#endif
+	connectDevices();
+	jsl->SetCallback(&joyShockPollCallback);
+	jsl->SetTouchCallback(&touchCallback);
+
 	#ifndef JSM_EMBEDDED_CORE
 	for (int i = 0; i < argc; ++i)
 	{
@@ -3071,6 +3206,9 @@ int main(int argc, char *argv[])
 			SettingsManager::getV<Switch>(SettingID::AUTOLOAD)->set(Switch::OFF);
 		}
 	}
+	#endif
+	#ifdef JSM_EMBEDDED_CORE
+	embedded_core_ready.store(true);
 	#endif
 	// The main loop is simple and reads like pseudocode
 	string enteredCommand;
@@ -3101,5 +3239,8 @@ int main(int argc, char *argv[])
 	LocalFree(argv);
 #endif
 	cleanUp();
+	#ifdef JSM_EMBEDDED_CORE
+	embedded_core_ready.store(false);
+	#endif
 	return 0;
 }
