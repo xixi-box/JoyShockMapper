@@ -53,6 +53,7 @@ const decodeHexUtf8 = (hex: string) => {
 const displayCommand = (command: string, zh = true) => {
   if (command === '"UI_ACTION COPY_ALL"') return zh ? "复制输入框全部文字" : "Copy all input text";
   if (command === '"UI_ACTION CUT_ALL"') return zh ? "剪切输入框全部文字" : "Cut all input text";
+  if (command === '"UI_ACTION SCREENSHOT"') return zh ? "系统截图" : "Screenshot";
   if (command === '"UI_ACTION FOCUS_INPUT LCONTROL+L"') return zh ? "聚焦当前软件的地址栏 / 搜索框" : "Focus current app address/search box";
   if (command === '"UI_ACTION FOCUS_INPUT LCONTROL+F"') return zh ? "聚焦当前软件的查找框" : "Focus current app find box";
   if (command === '"UI_ACTION FOCUS_INPUT TAB"') return zh ? "聚焦当前软件的下一个输入控件" : "Focus next control in current app";

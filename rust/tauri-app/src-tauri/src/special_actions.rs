@@ -24,8 +24,11 @@ unsafe extern "C" {
 unsafe extern "C" fn receive_action(value: *const std::ffi::c_char) {
     if value.is_null() { return; }
     let action = unsafe { CStr::from_ptr(value) }.to_string_lossy().into_owned();
+    log_action(&format!("received action: {action}"));
     if let Some(sender) = ACTIONS.get() {
         let _ = sender.send(action);
+    } else {
+        log_action("ACTIONS not initialized");
     }
 }
 
@@ -124,19 +127,33 @@ unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -
 }
 
 fn screenshot() -> Result<(), String> {
-    let operation = wide("open");
-    let target = wide("ms-screenclip:");
-    let result = unsafe { ShellExecuteW(std::ptr::null_mut(), operation.as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
-    if result as isize <= 32 {
-        // Fall back to the Snipping Tool executable when the URI scheme is not
-        // registered (older Windows builds or stripped shells).
-        let fallback = wide("SnippingTool.exe");
-        let fallback_result = unsafe { ShellExecuteW(std::ptr::null_mut(), operation.as_ptr(), fallback.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
-        if fallback_result as isize <= 32 {
-            return Err(format!("无法启动截图工具（错误码 {}）", fallback_result as isize));
+    log_action("screenshot invoked");
+    // Try the modern URI scheme first (Snip & Sketch), then the legacy
+    // SnippingTool.exe, then explorer as a last resort.
+    let attempts: Vec<(&str, &str)> = vec![
+        ("open", "ms-screenclip:"),
+        ("open", "C:\\Windows\\System32\\SnippingTool.exe"),
+        ("open", "C:\\Windows\\SysWOW64\\SnippingTool.exe"),
+    ];
+    for (operation, target) in attempts {
+        let op = wide(operation);
+        let tgt = wide(target);
+        let result = unsafe { ShellExecuteW(std::ptr::null_mut(), op.as_ptr(), tgt.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
+        log_action(&format!("ShellExecuteW({target}) -> {}", result as isize));
+        if result as isize > 32 {
+            return Ok(());
         }
     }
-    Ok(())
+    Err("无法启动截图工具".into())
+}
+
+fn log_action(message: &str) {
+    let dir = std::env::var_os("LOCALAPPDATA")
+        .map(|p| std::path::PathBuf::from(p).join("JoyShockMapper"))
+        .unwrap_or_else(|| ".".into());
+    let _ = std::fs::OpenOptions::new().create(true).append(true)
+        .open(dir.join("key-capture.log"))
+        .map(|mut file| { use std::io::Write; let _ = writeln!(file, "[action] {message}"); });
 }
 
 fn wide(value: &str) -> Vec<u16> {
