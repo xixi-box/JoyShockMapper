@@ -34,12 +34,16 @@ unsafe extern "C" fn receive_action(value: *const std::ffi::c_char) {
 
 pub fn start() {
     let (sender, receiver) = mpsc::channel();
-    if ACTIONS.set(sender).is_err() { return; }
+    if ACTIONS.set(sender).is_err() {
+        log_action("special_actions::start already initialized");
+        return;
+    }
     unsafe { jsm_core_set_action_callback(receive_action) };
+    log_action("special_actions::start OK, callback registered");
     std::thread::spawn(move || {
         while let Ok(action) = receiver.recv() {
             if let Err(error) = execute(&action) {
-                eprintln!("special action failed: {error}");
+                log_action(&format!("execute failed: {error}"));
             }
         }
     });
