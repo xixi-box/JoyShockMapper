@@ -272,10 +272,14 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   const [recording, setRecording] = useState(false);
   const [draft, setDraft] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const editingRef = useRef(false);
   const cancelTimer = () => { if (finishTimer.current != null) { globalThis.clearTimeout(finishTimer.current); finishTimer.current = null; } };
   const startHook = () => { if (!hookActiveRef.current) { hookActiveRef.current = true; void invoke("start_key_capture"); } };
   const stopHook = () => { if (hookActiveRef.current) { hookActiveRef.current = false; void invoke("stop_key_capture"); } };
   const begin = () => { cancelTimer(); held.current.clear(); captured.current = []; setDraft(""); recordingRef.current = true; setRecording(true); startHook(); };
+  const beginEdit = () => { setEditing(true); setEditText(value); editingRef.current = true; setActionsOpen(false); input.current?.focus(); };
   const capture = (name: string | null) => {
     if (!name || captured.current.includes(name)) return;
     captured.current.push(name);
@@ -335,13 +339,32 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
     };
   }, [recording]);
   return <div className={`captureField${recording ? " recording" : ""}`}>
-    <input ref={input} readOnly value={recording ? draft : displayCommand(value, zh)} placeholder={recording ? recordingHint : placeholder}
+    <input ref={input}
+      readOnly={!editing}
+      value={editing ? editText : (recording ? draft : displayCommand(value, zh))}
+      placeholder={recording ? recordingHint : placeholder}
       onMouseDown={event => { if (!recordingRef.current) activationMouse.current = event.button; }}
-      onFocus={() => { setActionsOpen(false); begin(); }}/>
-    {!recording && <button type="button" className="actionButton" onMouseDown={event => event.preventDefault()} onClick={() => setActionsOpen(open => !open)} title={zh ? "特殊功能" : "Special actions"}>◇</button>}
+      onDoubleClick={() => { if (!recordingRef.current && !editing) beginEdit(); }}
+      onFocus={() => { setActionsOpen(false); if (editingRef.current) { editingRef.current = false; return; } begin(); }}
+      onChange={event => { if (editing) setEditText(event.target.value); }}
+      onKeyDown={event => {
+        if (!editing) return;
+        if (event.key === "Enter") { onCommit(editText.trim()); setEditing(false); input.current?.blur(); }
+        if (event.key === "Escape") { setEditing(false); input.current?.blur(); }
+      }}
+      onBlur={() => {
+        if (editing) {
+          const text = editText.trim();
+          if (text && text !== value) onCommit(text);
+          setEditing(false);
+        }
+      }}/>
+    {!recording && !editing && <button type="button" className="actionButton" onMouseDown={event => event.preventDefault()} onClick={() => setActionsOpen(open => !open)} title={zh ? "特殊功能" : "Special actions"}>◇</button>}
     {value && !recording && <button type="button" className="clearButton" onMouseDown={event => event.preventDefault()} onClick={() => onCommit("")} title={clearTitle}>×</button>}
     {actionsOpen && <div className="actionMenu" onMouseDown={event => event.stopPropagation()}>
       <b>{zh ? "特殊功能" : "Special actions"}</b>
+      <button onClick={() => { beginEdit(); }}>{zh ? "手动输入命令…" : "Type command…"}</button>
+      <hr/>
       <button onClick={() => { onCommit('"UI_ACTION COPY_ALL"'); setActionsOpen(false); }}>{zh ? "复制输入框全部文字" : "Copy all input text"}</button>
       <button onClick={() => { onCommit('"UI_ACTION CUT_ALL"'); setActionsOpen(false); }}>{zh ? "剪切输入框全部文字" : "Cut all input text"}</button>
       <button onClick={() => { onCommit("LCONTROL\\ V\\"); setActionsOpen(false); }}>{zh ? "粘贴" : "Paste"}</button>
