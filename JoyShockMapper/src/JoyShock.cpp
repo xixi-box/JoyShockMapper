@@ -1,7 +1,8 @@
 #include "JoyShock.h"
 #include "InputHelpers.h"
 #include <algorithm>
-#define _USE_MATH_DEFINES
+#include <fstream>
+
 #include <math.h> // M_PI
 
 extern shared_ptr<JslWrapper> jsl;
@@ -448,6 +449,12 @@ void JoyShock::handleButtonChange(ButtonID id, bool pressed, int touchpadID)
 	}
 	else if ((!_context->nn && pressed) || (_context->nn > 0 && (id >= ButtonID::UP || id <= ButtonID::DOWN || id == ButtonID::S || id == ButtonID::E) && nnm.find(_context->nn) != nnm.end() && nnm.find(_context->nn)->second == id))
 	{
+		if (id == ButtonID::PLUS)
+		{
+			ofstream dbg;
+			dbg.open("C:\\Users\\wangshun\\AppData\\Local\\JoyShockMapper\\ui-action.log", ios::app);
+			dbg << "handleButtonChange PLUS pressed=" << pressed << "\n";
+		}
 		Pressed evt;
 		evt.time_now = _timeNow;
 		evt.turboTime = getSetting(SettingID::TURBO_PERIOD);
