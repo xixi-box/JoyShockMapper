@@ -35,6 +35,7 @@ static HOOK_THREAD_ID: Mutex<Option<u32>> = Mutex::new(None);
 static CALL_COUNT: AtomicU64 = AtomicU64::new(0);
 static WIN_COUNT: AtomicU64 = AtomicU64::new(0);
 static LAST_VK: AtomicU64 = AtomicU64::new(0);
+static RECENT_VKS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 
 fn log(message: &str) {
     let dir = std::env::var_os("LOCALAPPDATA")
@@ -94,10 +95,11 @@ pub fn start(app: AppHandle) -> Result<(), String> {
                 DispatchMessageW(&message);
             }
         }
-        log(&format!("loop exit calls={} win={} lastVk={}",
+        log(&format!("loop exit calls={} win={} lastVk={} vks={:?}",
             CALL_COUNT.load(Ordering::SeqCst),
             WIN_COUNT.load(Ordering::SeqCst),
-            LAST_VK.load(Ordering::SeqCst)));
+            LAST_VK.load(Ordering::SeqCst),
+            RECENT_VKS.lock().map(|v| v.clone()).unwrap_or_default()));
         unsafe { UnhookWindowsHookEx(hook) };
         let _ = SENDER.lock().map(|mut slot| *slot = None);
         let _ = HOOK_THREAD_ID.lock().map(|mut slot| *slot = None);
@@ -126,17 +128,23 @@ unsafe extern "system" fn keyboard_proc(code: i32, w_param: WPARAM, l_param: LPA
     if code < 0 {
         return unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) };
     }
-    let key_up = match w_param as u32 {
-        WM_KEYDOWN | WM_SYSKEYDOWN => false,
-        WM_KEYUP | WM_SYSKEYUP => true,
-        _ => return unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) },
-    };
+    // Diagnose every event before any filtering, so we can tell whether the
+    // Win key reaches the hook at all and with which message type.
     let info = unsafe { &*(l_param as *const KBDLLHOOKSTRUCT) };
     CALL_COUNT.fetch_add(1, Ordering::SeqCst);
     LAST_VK.store(info.vkCode as u64, Ordering::SeqCst);
     if info.vkCode as u16 == VK_LWIN || info.vkCode as u16 == VK_RWIN {
         WIN_COUNT.fetch_add(1, Ordering::SeqCst);
     }
+    if let Ok(mut recent) = RECENT_VKS.lock() {
+        recent.push(info.vkCode);
+        if recent.len() > 40 { recent.remove(0); }
+    }
+    let key_up = match w_param as u32 {
+        WM_KEYDOWN | WM_SYSKEYDOWN => false,
+        WM_KEYUP | WM_SYSKEYUP => true,
+        _ => return unsafe { CallNextHookEx(std::ptr::null_mut(), code, w_param, l_param) },
+    };
     if let Some(key) = virtual_key_name(info.vkCode as u16) {
         if let Ok(slot) = SENDER.lock() {
             if let Some(sender) = slot.as_ref() {
