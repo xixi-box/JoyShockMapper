@@ -32,7 +32,11 @@ pub enum Language { Zh, En }
 pub struct FlyMouseSettings {
     pub enabled: bool,
     pub hold_button: ControllerButton,
+    /// Maximum native JoyShockMapper sensitivity at fast rotation speeds.
     pub sensitivity: f32,
+    pub precision_sensitivity: f32,
+    pub response_threshold: f32,
+    pub smoothing_threshold: f32,
 }
 
 impl Default for FlyMouseSettings {
@@ -41,6 +45,9 @@ impl Default for FlyMouseSettings {
             enabled: true,
             hold_button: ControllerButton::Zl,
             sensitivity: 1.0,
+            precision_sensitivity: 0.7,
+            response_threshold: 75.0,
+            smoothing_threshold: 2.0,
         }
     }
 }

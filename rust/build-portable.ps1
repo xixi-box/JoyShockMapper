@@ -8,7 +8,7 @@ $cppBuild = Join-Path $repoRoot "out\build\embedded-core-ninja"
 $tauriRoot = Join-Path $repoRoot "rust\tauri-app"
 $portableRoot = Join-Path $repoRoot "out\portable"
 
-if (-not $VcVarsPath -and -not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+if (-not $VcVarsPath) {
     $candidates = @(
         "D:\vs2022\Community\VC\Auxiliary\Build\vcvars64.bat",
         "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
@@ -24,10 +24,14 @@ if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue) -and (-not $VcVarsPa
 }
 
 $nativeCommands = "cmake -S `"$repoRoot`" -B `"$cppBuild`" -G Ninja -DSDL=ON -DCMAKE_BUILD_TYPE=Release && cmake --build `"$cppBuild`" --target jsm_embedded_core -j 6"
-if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
-    & cmd.exe /d /c $nativeCommands
-} else {
+# Always load the VS dev environment when a vcvars64.bat was found: cl.exe may
+# already be on the ambient PATH (so the "Get-Command cl.exe" check alone would
+# skip vcvars), but rc.exe/mt.exe from the Windows SDK only appear after
+# vcvars is sourced, and cmake's compiler test needs them.
+if ($VcVarsPath -and (Test-Path -LiteralPath $VcVarsPath)) {
     & cmd.exe /d /c "call `"$VcVarsPath`" && $nativeCommands"
+} else {
+    & cmd.exe /d /c $nativeCommands
 }
 if ($LASTEXITCODE -ne 0) { throw "C++ 核心编译失败（退出码 $LASTEXITCODE）。" }
 
@@ -45,5 +49,23 @@ finally {
 New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
 $sourceExe = Join-Path $tauriRoot "src-tauri\target\release\joyshockmapper-tauri.exe"
 $portableExe = Join-Path $portableRoot "JoyShockMapper.exe"
+$rootExe = Join-Path $repoRoot "JoyShockMapper.exe"
+$restartInBackground = $false
+if (Test-Path -LiteralPath $rootExe) {
+    $rootFullPath = (Resolve-Path -LiteralPath $rootExe).Path
+    $runningRoot = Get-Process -Name "JoyShockMapper" -ErrorAction SilentlyContinue | Where-Object {
+        try { $_.Path -eq $rootFullPath } catch { $false }
+    }
+    if ($runningRoot) {
+        $restartInBackground = $true
+        $runningRoot | Stop-Process -Force
+        Start-Sleep -Milliseconds 400
+    }
+}
 Copy-Item -LiteralPath $sourceExe -Destination $portableExe -Force
-Write-Host "便携版已生成：$portableExe"
+Copy-Item -LiteralPath $sourceExe -Destination $rootExe -Force
+if ($restartInBackground) {
+    Start-Process -FilePath $rootExe -ArgumentList "--background" -WindowStyle Hidden
+}
+Write-Host "根目录成品已更新：$rootExe"
+Write-Host "发行版副本已生成：$portableExe"

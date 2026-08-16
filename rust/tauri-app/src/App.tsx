@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { JoyCons } from "./JoyCons";
-import { ControllerButton, CoreStatus, DeviceProfile, DjiMicStatus, GyroDebugStatus, UiSettings, defaults } from "./types";
+import { ControllerButton, CoreStatus, DeviceProfile, DjiMicStatus, GyroDebugStatus, ButtonStates, UiSettings, defaults } from "./types";
 import { DjiMicVisual } from "./DjiMicVisual";
 
-type Page = "home" | "gyro" | "settings";
+type Page = "home" | "gyro" | "test" | "settings";
 type MappingMode = "single" | "double";
 type VisualButton = { button: string; label: string; side: "left" | "right"; row: number; anchor: [number, number] };
 const holdButtons: ControllerButton[] = ["ZL", "ZR", "L", "R", "L3", "R3", "MINUS", "PLUS", "CAPTURE", "HOME"];
@@ -42,9 +41,50 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`;
 
-// Keyboard capture is handled by the Rust low-level hook (key_capture.rs),
-// which emits JoyShockMapper key names directly for any combination,
-// including system-reserved shortcuts such as Win+Shift+S.
+// Physical event.code -> JoyShockMapper key names accepted by the C++ core's
+// nameToKey (PlatformDefinitions.cpp). Only these survive `save_device_profile`.
+const codeToSimpleKey: Record<string, string> = {
+  Space: "SPACE", Enter: "ENTER", NumpadEnter: "ENTER", Escape: "ESC", Tab: "TAB", Backspace: "BACKSPACE",
+  ArrowLeft: "LEFT", ArrowRight: "RIGHT", ArrowUp: "UP", ArrowDown: "DOWN",
+  PageUp: "PAGEUP", PageDown: "PAGEDOWN", Home: "HOME", End: "END",
+  Insert: "INSERT", Delete: "DELETE", CapsLock: "CAPS_LOCK", ScrollLock: "SCROLL_LOCK", NumLock: "NUM_LOCK",
+  ContextMenu: "CONTEXT",
+  AudioVolumeMute: "MUTE", AudioVolumeDown: "VOLUME_DOWN", AudioVolumeUp: "VOLUME_UP",
+  MediaTrackNext: "NEXT_TRACK", MediaTrackPrevious: "PREV_TRACK", MediaStop: "STOP_TRACK",
+};
+const codeToSymbol: Record<string, string> = {
+  Semicolon: ";", Comma: ",", Period: ".", Slash: "/", Backquote: "`",
+  BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "+", Quote: "'",
+};
+const numpadName = (code: string) => {
+  if (code === "NumpadAdd") return "ADD";
+  if (code === "NumpadSubtract") return "SUBTRACT";
+  if (code === "NumpadMultiply") return "MULTIPLY";
+  if (code === "NumpadDivide") return "DIVIDE";
+  if (code === "NumpadDecimal") return "DECIMAL";
+  return code.startsWith("Numpad") ? `N${code.slice(6)}` : null;
+};
+const modifierFromCode = (code: string) => {
+  if (code === "ControlLeft") return "LCONTROL";
+  if (code === "ControlRight") return "RCONTROL";
+  if (code === "ShiftLeft") return "LSHIFT";
+  if (code === "ShiftRight") return "RSHIFT";
+  if (code === "AltLeft") return "LALT";
+  if (code === "AltRight") return "RALT";
+  if (code === "MetaLeft") return "LWINDOWS";
+  if (code === "MetaRight") return "RWINDOWS";
+  return null;
+};
+const keyNameFromEvent = (event: { code: string }): string | null => {
+  const modifier = modifierFromCode(event.code);
+  if (modifier) return modifier;
+  return codeToSimpleKey[event.code]
+    ?? (event.code.startsWith("Key") && event.code.length === 4 ? event.code.slice(3) : null)
+    ?? (event.code.startsWith("Digit") && event.code.length === 6 ? event.code.slice(5) : null)
+    ?? (event.code.startsWith("F") && /^F([1-9]|[12][0-9])$/.test(event.code) ? event.code : null)
+    ?? numpadName(event.code)
+    ?? codeToSymbol[event.code];
+};
 const mouseButtonNames = ["LMOUSE", "MMOUSE", "RMOUSE", "BMOUSE", "FMOUSE"];
 const chordCommand = (keys: string[]) => keys.length < 2 ? (keys[0] ?? "") : keys.map(key => `${key}\\`).join(" ");
 const decodeHexUtf8 = (hex: string) => {
@@ -109,6 +149,7 @@ export default function App() {
   const zh = settings.language !== "en";
   const pageTitle = page === "home" ? (zh ? "控制器总览" : "Controller overview")
     : page === "gyro" ? (zh ? "体感飞鼠" : "Gyro mouse")
+    : page === "test" ? (zh ? "按键测试" : "Button test")
     : (zh ? "应用设置" : "Settings");
 
   return <main className="appShell">
@@ -117,13 +158,13 @@ export default function App() {
       <nav>
         <button className={page === "home" ? "active" : ""} onClick={() => setPage("home")}><span>⌂</span> {zh ? "首页" : "Home"}</button>
         <button className={page === "gyro" ? "active" : ""} onClick={() => setPage("gyro")}><span>◎</span> {zh ? "陀螺仪" : "Gyro"}</button>
+        <button className={page === "test" ? "active" : ""} onClick={() => setPage("test")}><span>⌨</span> {zh ? "按键测试" : "Button test"}</button>
         <button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}><span>⚙</span> {zh ? "设置" : "Settings"}</button>
       </nav>
-      <div className="engine"><i/>{zh ? "C++ 实时核心" : "C++ real-time core"} {core.running ? (zh ? "运行中" : "running") : (zh ? "未启动" : "stopped")}<small>{zh ? "Rust 界面 · 单进程融合" : "Rust UI · single process"}</small></div>
     </aside>
     <section className="workspace">
       <header><div><p>JOYSHOCKMAPPER</p><h1>{pageTitle}</h1></div><div className="headerActions"><button className="languageButton" onClick={() => update({ ...settings, language: zh ? "en" : "zh" })}>{zh ? "EN" : "中文"}</button><div className="status"><i/>{core.deviceCount > 0 ? (zh ? `已连接 ${core.deviceCount} 个设备` : `${core.deviceCount} device${core.deviceCount === 1 ? "" : "s"} connected`) : (zh ? "等待手柄" : "Waiting for controller")}</div></div></header>
-      {!ready ? <div className="loading">{zh ? "正在载入 Rust 配置…" : "Loading Rust settings…"}</div> : page === "home" ? <Home core={core} djiMic={djiMic} zh={zh}/> : page === "gyro" ? <Gyro core={core} settings={settings} update={update} zh={zh}/> : <Settings settings={settings} update={update} setStartup={setStartup} zh={zh}/>}
+      {!ready ? <div className="loading">{zh ? "正在载入 Rust 配置…" : "Loading Rust settings…"}</div> : page === "home" ? <Home core={core} djiMic={djiMic} zh={zh}/> : page === "gyro" ? <Gyro core={core} settings={settings} update={update} zh={zh}/> : page === "test" ? <ButtonTest core={core} zh={zh}/> : <Settings settings={settings} update={update} setStartup={setStartup} zh={zh}/>}
     </section>
   </main>;
 }
@@ -266,7 +307,6 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   const held = useRef(new Set<string>());
   const captured = useRef<string[]>([]);
   const recordingRef = useRef(false);
-  const hookActiveRef = useRef(false);
   const activationMouse = useRef<number | null>(null);
   const finishTimer = useRef<number | null>(null);
   const [recording, setRecording] = useState(false);
@@ -276,8 +316,10 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   const [editText, setEditText] = useState("");
   const editingRef = useRef(false);
   const cancelTimer = () => { if (finishTimer.current != null) { globalThis.clearTimeout(finishTimer.current); finishTimer.current = null; } };
-  const startHook = () => { if (!hookActiveRef.current) { hookActiveRef.current = true; void invoke("start_key_capture"); } };
-  const stopHook = () => { if (hookActiveRef.current) { hookActiveRef.current = false; void invoke("stop_key_capture"); } };
+  // Keyboard recording is done with normal web keydown events, so there is no
+  // global low-level hook to manage.
+  const startHook = () => {};
+  const stopHook = () => {};
   const begin = () => { cancelTimer(); held.current.clear(); captured.current = []; setDraft(""); recordingRef.current = true; setRecording(true); startHook(); };
   const beginEdit = () => { setEditing(true); setEditText(value); editingRef.current = true; setActionsOpen(false); input.current?.focus(); };
   const capture = (name: string | null) => {
@@ -301,18 +343,17 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
   useEffect(() => () => stopHook(), []);
   useEffect(() => {
     if (!recording) return;
-    let unlisten: (() => void) | undefined;
-    void listen<{ kind: string; key: string }>("key-captured", event => {
+    const keyDown = (event: KeyboardEvent) => {
       if (!recordingRef.current) return;
-      cancelTimer();
-      if (event.payload.kind === "down") {
-        held.current.add(`Key:${event.payload.key}`);
-        capture(event.payload.key);
-      } else {
-        held.current.delete(`Key:${event.payload.key}`);
-        if (held.current.size === 0) finishAfterPause();
-      }
-    }).then(dispose => { unlisten = dispose; });
+      event.preventDefault(); event.stopPropagation(); cancelTimer();
+      const name = keyNameFromEvent(event);
+      if (name) { held.current.add(`Key:${event.code}`); capture(name); }
+    };
+    const keyUp = (event: KeyboardEvent) => {
+      if (!recordingRef.current) return;
+      event.preventDefault(); event.stopPropagation(); held.current.delete(`Key:${event.code}`);
+      if (held.current.size === 0) finishAfterPause();
+    };
     const mouseDown = (event: MouseEvent) => {
       if (!recordingRef.current) return;
       if (activationMouse.current === event.button) return;
@@ -330,10 +371,11 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
       event.preventDefault(); event.stopPropagation(); cancelTimer();
       capture(event.deltaY < 0 ? "SCROLLUP" : "SCROLLDOWN"); finishAfterPause();
     };
+    window.addEventListener("keydown", keyDown, true); window.addEventListener("keyup", keyUp, true);
     window.addEventListener("mousedown", mouseDown, true); window.addEventListener("mouseup", mouseUp, true);
     window.addEventListener("wheel", wheel, { capture: true, passive: false });
     return () => {
-      unlisten?.();
+      window.removeEventListener("keydown", keyDown, true); window.removeEventListener("keyup", keyUp, true);
       window.removeEventListener("mousedown", mouseDown, true); window.removeEventListener("mouseup", mouseUp, true);
       window.removeEventListener("wheel", wheel, true); cancelTimer();
     };
@@ -363,8 +405,6 @@ function MappingInput({ value, onCommit, placeholder, recordingHint, clearTitle,
     {value && !recording && <button type="button" className="clearButton" onMouseDown={event => event.preventDefault()} onClick={() => onCommit("")} title={clearTitle}>×</button>}
     {actionsOpen && <div className="actionMenu" onMouseDown={event => event.stopPropagation()}>
       <b>{zh ? "特殊功能" : "Special actions"}</b>
-      <button onClick={() => { beginEdit(); }}>{zh ? "手动输入命令…" : "Type command…"}</button>
-      <hr/>
       <button onClick={() => { onCommit('"UI_ACTION COPY_ALL"'); setActionsOpen(false); }}>{zh ? "复制输入框全部文字" : "Copy all input text"}</button>
       <button onClick={() => { onCommit('"UI_ACTION CUT_ALL"'); setActionsOpen(false); }}>{zh ? "剪切输入框全部文字" : "Cut all input text"}</button>
       <button onClick={() => { onCommit("LCONTROL\\ V\\"); setActionsOpen(false); }}>{zh ? "粘贴" : "Paste"}</button>
@@ -388,6 +428,19 @@ function Gyro({ core, settings, update, zh }: { core: CoreStatus; settings: UiSe
   const [calibrating, setCalibrating] = useState(false);
   const driftTest = useRef<{ started: number; lastCount: number; samples: Array<[number, number]> } | null>(null);
   const previousSample = useRef({ count: 0, time: performance.now() });
+  const cursorPos = useRef({ x: 50, y: 50 });
+  const [cursor, setCursor] = useState({ x: 50, y: 50 });
+  useEffect(() => {
+    // Accumulate the real mouse output into a live cursor preview so tuning
+    // a slider immediately shows "this is how fast the cursor will move".
+    const refresh = () => {
+      cursorPos.current.x = Math.max(2, Math.min(98, cursorPos.current.x + telemetry.outputX * 0.35));
+      cursorPos.current.y = Math.max(2, Math.min(98, cursorPos.current.y + telemetry.outputY * 0.35));
+      setCursor({ x: cursorPos.current.x, y: cursorPos.current.y });
+    };
+    const timer = globalThis.setInterval(refresh, 50);
+    return () => globalThis.clearInterval(timer);
+  }, [telemetry.outputX, telemetry.outputY]);
   useEffect(() => {
     const refresh = () => void invoke<GyroDebugStatus>("get_gyro_debug_status").then(next => {
       const now = performance.now();
@@ -428,29 +481,31 @@ function Gyro({ core, settings, update, zh }: { core: CoreStatus; settings: UiSe
   const trail = useRef<Array<[number, number]>>([]);
   trail.current.push([telemetry.inputX, telemetry.inputY]);
   if (trail.current.length > 40) trail.current.splice(0, trail.current.length - 40);
-  // Sensitivity response curve: input speed -> output sensitivity multiplier.
-  // Below responseThreshold the precision sensitivity applies; above it the
-  // fast sensitivity applies; the blend is a smooth transition.
+  // Sensitivity response curve: input speed (°/s) -> mouse output velocity.
+  // The output axis is "input speed × applied sensitivity", matching what the
+  // C++ core actually produces (embedded_gyro_output_* = gyro * sens).
   const responseThreshold = fly.responseThreshold;
   const precisionSensitivity = fly.precisionSensitivity;
   const fastSensitivity = fly.sensitivity;
+  const curveMaxSpeed = Math.max(responseThreshold * 3, 150);
+  const curveMaxOutput = Math.max(curveMaxSpeed * fastSensitivity, 200);
+  const applySens = (speed: number) => {
+    const blend = speed <= responseThreshold ? 0 : Math.min(1, (speed - responseThreshold) / Math.max(responseThreshold, 1));
+    const smooth = 1 - Math.pow(1 - blend, 2);
+    return precisionSensitivity + (fastSensitivity - precisionSensitivity) * smooth;
+  };
   const curvePoints = (() => {
     const points: string[] = [];
-    const maxSpeed = Math.max(responseThreshold * 3, 150);
-    for (let speed = 0; speed <= maxSpeed; speed += maxSpeed / 60) {
-      const blend = speed <= responseThreshold ? 0 : Math.min(1, (speed - responseThreshold) / Math.max(responseThreshold, 1));
-      const smooth = 1 - Math.pow(1 - blend, 2);
-      const sens = precisionSensitivity + (fastSensitivity - precisionSensitivity) * smooth;
-      points.push(`${(speed / maxSpeed * 100).toFixed(1)},${(sens / Math.max(fastSensitivity, precisionSensitivity, 0.1) * 100).toFixed(1)}`);
+    for (let speed = 0; speed <= curveMaxSpeed; speed += curveMaxSpeed / 60) {
+      const output = speed * applySens(speed);
+      points.push(`${(speed / curveMaxSpeed * 100).toFixed(1)},${(output / curveMaxOutput * 100).toFixed(1)}`);
     }
     return points.join(" ");
   })();
-  const curveMaxSens = Math.max(fastSensitivity, precisionSensitivity, 0.1);
-  const curveMaxSpeed = Math.max(responseThreshold * 3, 150);
-  const workingBlend = magnitude <= responseThreshold ? 0 : Math.min(1, (magnitude - responseThreshold) / Math.max(responseThreshold, 1));
-  const workingSens = precisionSensitivity + (fastSensitivity - precisionSensitivity) * (1 - Math.pow(1 - workingBlend, 2));
+  const workingSens = applySens(magnitude);
+  const workingOutput = Math.abs(telemetry.outputX) || Math.hypot(telemetry.outputX, telemetry.outputY);
   const workingX = (Math.min(magnitude, curveMaxSpeed) / curveMaxSpeed * 100).toFixed(1);
-  const workingY = (workingSens / curveMaxSens * 100).toFixed(1);
+  const workingY = (Math.min(workingOutput, curveMaxOutput) / curveMaxOutput * 100).toFixed(1);
   const diagnostic = core.deviceCount === 0 ? (zh ? "等待手柄连接" : "Waiting for controller")
     : sampleRate === 0 ? (zh ? "未收到陀螺仪数据" : "No gyro samples")
     : !fly.enabled ? (zh ? "飞鼠已关闭" : "Fly mouse is disabled")
@@ -469,9 +524,10 @@ function Gyro({ core, settings, update, zh }: { core: CoreStatus; settings: UiSe
     : driftResult.noise >= 1.5 ? (zh ? "中心偏移不大，但抖动较多。先确认桌面稳定，再把“低速平滑范围”提高 0.5～1。" : "Bias is low but noise is high. Stabilize the controller, then raise low-speed smoothing by 0.5–1.")
     : (zh ? "静态表现正常。若实际瞄准太快或太慢，只调整精细移动灵敏度即可。" : "Static behavior is healthy. Adjust precision sensitivity only if aiming feels too fast or slow.");
   return <div className="panel gyroPanel">
-    <div className="panelHead"><div><span>HOLD TO AIM</span><h2>{zh ? "按住启用，松开停止" : "Hold to enable, release to stop"}</h2><p>{zh ? "这里显示 C++ 核心的真实陀螺仪输入和鼠标输出，参数直接写入 JoyShockMapper 原生引擎。" : "Live values come from the C++ core; controls tune the native JoyShockMapper engine."}</p></div><Toggle value={fly.enabled} onChange={value => patch({ enabled: value })} zh={zh}/></div>
-    <section className={`gyroMonitor ${telemetry.active ? "active" : ""}`}><div className="gyroScope"><svg className="scopeTrail" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={trail.current.map(([x, y], index) => `${50 + Math.max(-45, Math.min(45, x / 4))},${50 + Math.max(-45, Math.min(45, y / 4))}`).join(" ")} /></svg><i style={{ left: `${dotX}%`, top: `${dotY}%` }}/><span>+</span></div><div className="gyroReadout"><b>{diagnostic}</b><div><span>{zh ? "水平输入" : "Horizontal input"}<strong>{telemetry.inputX.toFixed(1)} °/s</strong></span><span>{zh ? "垂直输入" : "Vertical input"}<strong>{telemetry.inputY.toFixed(1)} °/s</strong></span><span>{zh ? "鼠标输出 X" : "Mouse output X"}<strong>{telemetry.outputX.toFixed(2)}</strong></span><span>{zh ? "鼠标输出 Y" : "Mouse output Y"}<strong>{telemetry.outputY.toFixed(2)}</strong></span></div><small>{zh ? `数据更新率：${sampleRate} 次/秒 · ${telemetry.active ? "启用键已按住" : "启用键未按住"}` : `Sample rate: ${sampleRate}/s · ${telemetry.active ? "activation held" : "activation not held"}`}</small></div></section>
-    <section className="sensitivityCurve"><div className="curveHead"><span>{zh ? "灵敏度响应曲线" : "Sensitivity response curve"}</span><small>{zh ? `横轴：输入角速度 (°/s) · 纵轴：输出灵敏度` : `X: input speed (°/s) · Y: output sensitivity`}</small></div><div className="curvePlot"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline className="curveLine" points={curvePoints}/><circle className="curveWorking" cx={workingX} cy={workingY} r={3}/></svg><span className="curvePivot" style={{ left: `${(responseThreshold / curveMaxSpeed * 100).toFixed(1)}%` }}/></div><div className="curveLegend"><span>{zh ? `精细 ${precisionSensitivity.toFixed(1)}` : `Precision ${precisionSensitivity.toFixed(1)}`}</span><span>{zh ? `阈值 ${responseThreshold}°/s` : `Threshold ${responseThreshold}°/s`}</span><span>{zh ? `快速 ${fastSensitivity.toFixed(1)}` : `Fast ${fastSensitivity.toFixed(1)}`}</span><span>{zh ? `当前 ${workingSens.toFixed(1)}` : `Now ${workingSens.toFixed(1)}`}</span></div></section>
+    <div className="panelHead"><div><span>HOLD TO AIM</span><h2>{zh ? "按住启用，松开停止" : "Hold to enable, release to stop"}</h2><p>{zh ? "按住启用键时，手柄的转动会转换成鼠标移动；调低灵敏度获得更精细的瞄准，调高则更快转身。" : "While the activation button is held, tilting the controller moves the mouse. Lower sensitivity for finer aim, higher for faster turns."}</p></div><Toggle value={fly.enabled} onChange={value => patch({ enabled: value })} zh={zh}/></div>
+    <section className={`gyroMonitor ${telemetry.active ? "active" : ""}`}><div className="gyroScope"><svg className="scopeTrail" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={trail.current.map(([x, y], index) => `${50 + Math.max(-45, Math.min(45, x / 4))},${50 + Math.max(-45, Math.min(45, y / 4))}`).join(" ")} /></svg><i style={{ left: `${dotX}%`, top: `${dotY}%` }}/><span>+</span><b className="scopeMark n">150</b><b className="scopeMark s">150</b><b className="scopeMark w">150</b><b className="scopeMark e">150</b></div><div className="gyroReadout"><b>{diagnostic}</b><div><span className="readoutMain"><small>{zh ? "水平输入" : "Horizontal"}</small><strong>{telemetry.inputX > 0 ? "+" : ""}{telemetry.inputX.toFixed(0)} <em>°/s</em></strong></span><span className="readoutMain"><small>{zh ? "垂直输入" : "Vertical"}</small><strong>{telemetry.inputY > 0 ? "+" : ""}{telemetry.inputY.toFixed(0)} <em>°/s</em></strong></span><span className="readoutOut"><small>{zh ? "鼠标 X" : "Mouse X"}</small><strong>{telemetry.outputX.toFixed(1)}</strong></span><span className="readoutOut"><small>{zh ? "鼠标 Y" : "Mouse Y"}</small><strong>{telemetry.outputY.toFixed(1)}</strong></span></div><div className="scopeBar"><div className="scopeBarInner"><span style={{ width: `${Math.min(100, Math.abs(telemetry.inputX))}%`, background: "linear-gradient(90deg,#00c8f0,#e60012)", marginLeft: telemetry.inputX < 0 ? "0" : "50%", transform: telemetry.inputX < 0 ? "scaleX(-1)" : "none" }} /></div><i className="scopeBarMid"/></div><small>{zh ? `数据更新率：${sampleRate} 次/秒 · ${telemetry.active ? "启用键已按住" : "启用键未按住"}` : `Sample rate: ${sampleRate}/s · ${telemetry.active ? "activation held" : "activation not held"}`}</small></div></section>
+    <section className="feelPreview"><div className="feelHead"><span>{zh ? "实时手感预览" : "Live feel preview"}</span><small>{zh ? "转动手柄，看光标按真实输出移动的速度" : "Move the controller; the cursor follows the real output speed"}</small></div><div className="feelPad"><span className="feelCursor" style={{ left: `${cursor.x}%`, top: `${cursor.y}%` }} /></div><div className="feelReadout"><span>{zh ? "输出速度" : "Output speed"}<strong>{workingOutput.toFixed(0)} <em>px/s</em></strong></span><span>{zh ? "当前灵敏度" : "Sens"}<strong>{workingSens.toFixed(2)}</strong></span><span>{zh ? "转动速度" : "Speed"}<strong>{magnitude.toFixed(0)} <em>°/s</em></strong></span></div></section>
+    <section className="sensitivityCurve"><div className="curveHead"><span>{zh ? "灵敏度响应曲线" : "Sensitivity response curve"}</span><small>{zh ? "横轴：转动速度 · 纵轴：鼠标输出速度" : "X: controller speed · Y: mouse output"}</small></div><div className="curvePlot"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="curveArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#e60012" stopOpacity=".18"/><stop offset="100%" stopColor="#e60012" stopOpacity=".02"/></linearGradient></defs><polyline className="curveLine" points={curvePoints}/><polygon className="curveFill" points={`0,100 ${curvePoints} 100,100`} fill="url(#curveArea)"/><circle className="curveWorking" cx={workingX} cy={workingY} r={3.2}/><line className="curveGuide" x1={workingX} y1={workingY} x2={workingX} y2="100"/></svg><span className="curvePivot" style={{ left: `${(responseThreshold / curveMaxSpeed * 100).toFixed(1)}%` }}/><div className="curveZone z1" style={{ right: `${(100 - responseThreshold / curveMaxSpeed * 100).toFixed(1)}%` }}><b>{zh ? "精细区" : "Fine"}</b></div><div className="curveZone z2" style={{ left: `${(responseThreshold / curveMaxSpeed * 100).toFixed(1)}%` }}><b>{zh ? "加速区" : "Fast"}</b></div><div className="curveWorkingBubble" style={{ left: `${workingX}%`, bottom: `${(100 - Number(workingY)).toFixed(1)}%` }}><b>{zh ? "当前" : "Now"} {magnitude.toFixed(0)}°/s</b><span>{zh ? "输出" : "out"} {workingOutput.toFixed(0)}px/s</span></div></div><div className="curveAxis"><span>0</span><span>{Math.round(curveMaxSpeed * 0.5)}</span><span>{curveMaxSpeed}°/s</span></div><div className="curveLegend"><span style={{ color: "#00b3e6" }}>{zh ? `精细 ${precisionSensitivity.toFixed(1)}` : `Fine ${precisionSensitivity.toFixed(1)}`}</span><span style={{ color: "#8a8a8a" }}>{zh ? `阈值 ${responseThreshold}°/s` : `Threshold ${responseThreshold}°/s`}</span><span style={{ color: "#e60012" }}>{zh ? `快速 ${fastSensitivity.toFixed(1)}` : `Fast ${fastSensitivity.toFixed(1)}`}</span></div></section>
     <section className="driftLab"><div className="driftTarget"><span className="north">{zh ? "上漂" : "UP"}</span><span className="south">{zh ? "下漂" : "DOWN"}</span><span className="west">{zh ? "左漂" : "LEFT"}</span><span className="east">{zh ? "右漂" : "RIGHT"}</span><div className="driftRings"/><i className="driftVector" style={{ width: `${Math.min(62, driftMagnitude * 25)}px`, transform: `rotate(${driftAngle}deg)` }}/><b style={{ left: `${driftMarkerX}%`, top: `${driftMarkerY}%` }}/></div><div className="driftReport"><small>{zh ? "4 秒静止偏移体检" : "4-second stationary drift check"}</small><h3>{driftResult ? `${driftGrade} · ${driftMagnitude.toFixed(2)} °/s` : driftTest.current ? (zh ? `检测中 ${Math.round(driftProgress * 100)}%` : `Testing ${Math.round(driftProgress * 100)}%`) : (zh ? "看看手柄会往哪边自己漂" : "See where the controller drifts")}</h3><div className="driftProgress"><i style={{ width: `${driftProgress * 100}%` }}/></div>{driftResult && <p>{zh ? `水平 ${driftResult.x > 0 ? "向右" : "向左"} ${Math.abs(driftResult.x).toFixed(2)}，垂直 ${driftResult.y > 0 ? "向下" : "向上"} ${Math.abs(driftResult.y).toFixed(2)}，抖动 ${driftResult.noise.toFixed(2)} °/s。` : `Horizontal ${driftResult.x.toFixed(2)}, vertical ${driftResult.y.toFixed(2)}, noise ${driftResult.noise.toFixed(2)} °/s.`}</p>}<strong>{driftAdvice}</strong><div className="driftActions"><button disabled={!core.deviceCount || !!driftTest.current || calibrating} onClick={startDriftTest}>{zh ? "开始静止检测" : "Start stationary test"}</button><button className="calibrateButton" disabled={!core.deviceCount || calibrating} onClick={() => void calibrate()}>{calibrating ? (zh ? "校准中，请保持不动…" : "Calibrating; keep still…") : (zh ? "自动校准并复测" : "Calibrate and retest")}</button></div></div></section>
     <div className="gyroHelp"><b>{zh ? "快速调试方法" : "Quick tuning"}</b><span>{zh ? "① 平放手柄，输入应接近 0　② 按住启用键，缓慢转动看光点与输出　③ 先调精细灵敏度，再调快速灵敏度；感觉拖尾就降低平滑。" : "① Hold still: input should approach 0. ② Hold activation and rotate slowly. ③ Tune precision first, then fast sensitivity; reduce smoothing if movement trails."}</span><button onClick={() => patch({ precisionSensitivity: 1.5, sensitivity: 4, responseThreshold: 80, smoothingThreshold: 2 })}>{zh ? "恢复易调试的推荐值" : "Restore tuning defaults"}</button></div>
     <div className="formGrid gyroGrid"><label>{zh ? "启用键" : "Activation button"}<select value={fly.holdButton} onChange={e => patch({ holdButton: e.target.value as ControllerButton })}>{holdButtons.map(button => <option key={button}>{button}</option>)}</select><small>{zh ? "只有按住这个键时才移动鼠标" : "Mouse moves only while this button is held"}</small></label><Range label={zh ? "精细移动灵敏度" : "Precision sensitivity"} value={fly.precisionSensitivity} min={0.1} max={10} step={0.1} onChange={value => patch({ precisionSensitivity: value })} hint={zh ? "慢速转动时使用" : "Used for slow motion"}/><Range label={zh ? "快速移动灵敏度" : "Fast sensitivity"} value={fly.sensitivity} min={0.1} max={10} step={0.1} onChange={value => patch({ sensitivity: value })} hint={zh ? "快速转动时逐渐过渡到此速度" : "Reached during fast motion"}/><Range label={zh ? "加速生效速度" : "Response threshold"} value={fly.responseThreshold} min={10} max={250} step={5} onChange={value => patch({ responseThreshold: value })} hint={zh ? "数值越小，越早进入快速灵敏度" : "Lower values reach fast sensitivity sooner"}/><Range label={zh ? "低速平滑范围" : "Low-speed smoothing"} value={fly.smoothingThreshold} min={0} max={15} step={0.5} onChange={value => patch({ smoothingThreshold: value })} hint={zh ? "0 为关闭；过高会感觉迟滞" : "0 disables it; high values add latency"}/></div>
@@ -482,9 +538,59 @@ function Range({ label, value, min, max, step, onChange, hint }: { label: string
   return <label>{label}<strong>{value.toFixed(step < 1 ? 1 : 0)}</strong><input type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.target.value))}/><small>{hint}</small></label>;
 }
 
+function ButtonTest({ core, zh }: { core: CoreStatus; zh: boolean }) {
+  const [states, setStates] = useState<ButtonStates>({ leftButtons: 0, rightButtons: 0, leftConnected: false, rightConnected: false, leftTrigger: 0, rightTrigger: 0 });
+  useEffect(() => {
+    const refresh = () => void invoke<ButtonStates>("get_button_states").then(setStates).catch(() => undefined);
+    refresh(); const timer = globalThis.setInterval(refresh, 60);
+    return () => globalThis.clearInterval(timer);
+  }, []);
+  const bit = (mask: number, offset: number) => (mask & (1 << offset)) !== 0;
+  type Btn = { name: string; off: number };
+  // SL/SR use the same bit offsets for both halves; a single connected
+  // controller reports them on whichever side owns the bits. Show them on
+  // both sides so a lone Joy-Con always lights up its bumpers.
+  const leftButtons: Btn[] = [
+    { name: "UP", off: 0 }, { name: "DOWN", off: 1 }, { name: "LEFT", off: 2 }, { name: "RIGHT", off: 3 },
+    { name: "MINUS", off: 5 }, { name: "L3", off: 6 }, { name: "L", off: 8 }, { name: "SL", off: 19 },
+    { name: "SR", off: 20 },
+  ];
+  const rightButtons: Btn[] = [
+    { name: "PLUS", off: 4 }, { name: "R3", off: 7 }, { name: "R", off: 9 },
+    { name: "S", off: 12 }, { name: "E", off: 13 }, { name: "W", off: 14 }, { name: "N", off: 15 },
+    { name: "HOME", off: 16 }, { name: "CAPTURE", off: 17 }, { name: "SL", off: 19 }, { name: "SR", off: 20 },
+  ];
+  const renderKey = (mask: number, btn: Btn, accent: string) => (
+    <div key={btn.name} className={`testKey ${bit(mask, btn.off) ? "on" : ""}`}><span className="testKeyDot" style={{ background: bit(mask, btn.off) ? accent : "#d0d0d0" }} /><b>{btn.name}</b></div>
+  );
+  const renderSide = (label: string, connected: boolean, mask: number, trigger: number, buttons: Btn[], accent: string) => {
+    const triggerActive = trigger > 0.05;
+    return <div className="testSide">
+      <div className="testSideHead"><span className="testSideDot" style={{ background: connected ? accent : "#aaa", boxShadow: connected ? `0 0 8px ${accent}` : "none" }} /><b>{label}</b><span>{connected ? (zh ? "已连接" : "Connected") : (zh ? "未连接" : "Not connected")}</span></div>
+      <div className="testTrigger"><span>{label === "LEFT" ? (zh ? "ZL" : "ZL") : (zh ? "ZR" : "ZR")}</span><div className="triggerBar"><i style={{ width: `${Math.round(trigger * 100)}%`, background: triggerActive ? accent : "#e3e5e8" }} /></div><b className={triggerActive ? "on" : ""}>{(trigger * 100).toFixed(0)}%</b></div>
+      <div className="testGrid">{buttons.map(btn => renderKey(mask, btn, accent))}</div>
+    </div>;
+  };
+  const leftConnected = states.leftConnected || core.leftConnected;
+  const rightConnected = states.rightConnected || core.rightConnected;
+  return <div className="panel testPanel">
+    <div className="panelHead"><div><span>BUTTON TEST</span><h2>{zh ? "按键测试" : "Button test"}</h2><p>{zh ? "按下每个按键，对应的指示灯会点亮；扳机键（ZL/ZR）用进度条显示按压力度。用来排查某个键是否失效。" : "Press each button; the indicator lights up when detected. Triggers show as a pressure bar."}</p></div></div>
+    <div className="testSides">
+      {renderSide("LEFT", leftConnected, states.leftButtons, states.leftTrigger, leftButtons, "#00c8f0")}
+      {renderSide("RIGHT", rightConnected, states.rightButtons, states.rightTrigger, rightButtons, "#ff4d4d")}
+    </div>
+    <div className="testRaw"><small>{zh ? "原始位图" : "Raw mask"}</small><code>L=0x{states.leftButtons.toString(16)} R=0x{states.rightButtons.toString(16)}</code></div>
+  </div>;
+}
+
 function Settings({ settings, update, setStartup, zh }: { settings: UiSettings; update: (v: UiSettings) => Promise<void>; setStartup: (v: boolean) => Promise<void>; zh: boolean }) {
   return <div className="panel settingsPanel"><Setting title={zh ? "最小化到系统托盘" : "Minimize to system tray"} desc={zh ? "点击最小化按钮时隐藏到托盘；关闭此项则保留在任务栏。" : "Hide in the tray when minimized; disable this to remain on the taskbar."}><Toggle value={settings.minimizeToTray} onChange={value => update({ ...settings, minimizeToTray: value })} zh={zh}/></Setting><Setting title={zh ? "关闭窗口时留在托盘" : "Keep running when closed"} desc={zh ? "点击右上角 × 只隐藏窗口。只有托盘右键菜单中的“退出”才会彻底结束程序。" : "The title-bar close button only hides the window. Use Quit in the tray menu to exit."}><span className="alwaysOn">{zh ? "始终开启" : "Always on"}</span></Setting><Setting title={zh ? "开机自动启动" : "Start with Windows"} desc={zh ? "登录 Windows 后自动运行，不需要管理员权限。" : "Start automatically after Windows sign-in without administrator rights."}><Toggle value={settings.startWithWindows} onChange={setStartup} zh={zh}/></Setting><div className="note">{zh ? "单击托盘图标可恢复主窗口；右键托盘图标可以彻底退出。" : "Left-click the tray icon to restore the window; right-click it to quit."}</div></div>;
 }
 
-function Toggle({ value, onChange, zh }: { value: boolean; onChange: (v: boolean) => void; zh: boolean }) { return <button className={`toggle ${value ? "on" : ""}`} onClick={() => onChange(!value)} aria-label={value ? (zh ? "关闭" : "Disable") : (zh ? "开启" : "Enable")}><i/></button>; }
+function Toggle({ value, onChange, zh }: { value: boolean; onChange: (v: boolean) => void; zh: boolean }) {
+  return <span className={`toggleWrap ${value ? "on" : ""}`}>
+    <span className="toggleLabel">{value ? (zh ? "已开启" : "On") : (zh ? "已关闭" : "Off")}</span>
+    <button className={`toggle ${value ? "on" : ""}`} onClick={() => onChange(!value)} aria-label={value ? (zh ? "关闭" : "Disable") : (zh ? "开启" : "Enable")}><i/></button>
+  </span>;
+}
 function Setting({ title, desc, children }: React.PropsWithChildren<{ title: string; desc: string }>) { return <div className="setting"><div><h3>{title}</h3><p>{desc}</p></div>{children}</div>; }

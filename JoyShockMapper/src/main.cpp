@@ -63,6 +63,12 @@ static atomic_uint64_t embedded_full_profile_hash = 0;
 static atomic_int embedded_simulated_buttons = 0;
 static atomic_int embedded_mouse_event_count = 0;
 static atomic_int embedded_key_event_count = 0;
+static atomic_int embedded_left_buttons = 0;
+static atomic_int embedded_right_buttons = 0;
+static atomic_int embedded_left_connected = 0;
+static atomic_int embedded_right_connected = 0;
+static atomic<float> embedded_left_trigger = 0.f;
+static atomic<float> embedded_right_trigger = 0.f;
 static atomic<float> embedded_gyro_x = 0.f;
 static atomic<float> embedded_gyro_y = 0.f;
 static atomic<float> embedded_gyro_output_x = 0.f;
@@ -81,6 +87,22 @@ extern "C" __declspec(dllexport) int jsm_core_device_count()
 extern "C" __declspec(dllexport) int jsm_core_device_mask()
 {
 	return embedded_device_mask.load();
+}
+
+extern "C" __declspec(dllexport) int jsm_core_left_buttons() { return embedded_left_buttons.load(); }
+extern "C" __declspec(dllexport) int jsm_core_right_buttons() { return embedded_right_buttons.load(); }
+extern "C" __declspec(dllexport) int jsm_core_left_connected() { return embedded_left_connected.load(); }
+extern "C" __declspec(dllexport) int jsm_core_right_connected() { return embedded_right_connected.load(); }
+extern "C" __declspec(dllexport) float jsm_core_left_trigger() { return embedded_left_trigger.load(); }
+extern "C" __declspec(dllexport) float jsm_core_right_trigger() { return embedded_right_trigger.load(); }
+extern "C" __declspec(dllexport) void jsm_core_reset_button_states()
+{
+	embedded_left_buttons.store(0);
+	embedded_right_buttons.store(0);
+	embedded_left_connected.store(0);
+	embedded_right_connected.store(0);
+	embedded_left_trigger.store(0.f);
+	embedded_right_trigger.store(0.f);
 }
 extern "C" __declspec(dllexport) bool jsm_core_ready() { return embedded_core_ready.load(); }
 extern "C" __declspec(dllexport) void jsm_core_set_startup_virtual_controller(bool enabled) { embedded_attach_virtual_on_startup.store(enabled); }
@@ -1190,6 +1212,23 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 	}
 
 	int buttons = jsl->GetButtons(jc->_handle);
+#ifdef JSM_EMBEDDED_CORE
+	// Expose raw button states for the UI button test page. A split Joy-Con
+	// pair reports each half separately; full controllers report on the right
+	// side, which keeps the mapping layout consistent with the app.
+	if (jc->_splitType == JS_SPLIT_TYPE_LEFT)
+	{
+		embedded_left_buttons.store(buttons);
+		embedded_left_connected.store(1);
+		embedded_left_trigger.store(jsl->GetLeftTrigger(jc->_handle));
+	}
+	else
+	{
+		embedded_right_buttons.store(buttons);
+		embedded_right_connected.store(1);
+		embedded_right_trigger.store(jsl->GetRightTrigger(jc->_handle));
+	}
+#endif
 	// button mappings
 	if (jc->_splitType != JS_SPLIT_TYPE_RIGHT)
 	{
@@ -1785,6 +1824,10 @@ void cleanUp()
 	embedded_left_profile_hash.store(0);
 	embedded_right_profile_hash.store(0);
 	embedded_full_profile_hash.store(0);
+	embedded_left_buttons.store(0);
+	embedded_right_buttons.store(0);
+	embedded_left_connected.store(0);
+	embedded_right_connected.store(0);
 	#endif
 }
 

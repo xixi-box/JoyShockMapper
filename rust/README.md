@@ -14,15 +14,18 @@ Current slices:
   frames to a C++ reference and Rust, then checks every output frame.
 - `tauri-app`: the Tauri 2 + React application, native persistence, tray
   restore, autostart, per-device profiles, and a C ABI bridge to the embedded
-  C++ core.
+  C++ core. Autostart uses `--background`; structured desktop actions are
+  dispatched from the C++ mapping engine to a non-real-time Rust worker.
 
 Window close is intentionally intercepted: the title-bar close button hides
 the main window, and only the tray menu's Quit item terminates the process.
+Autostart keeps this window hidden until the user opens it from the tray.
 - `input-engine`: deterministic press/release, single/double timing and simple
   simultaneous-key parsing used for Rust-side behavior tests.
 
-Run `build-portable.ps1` from PowerShell to build the static C++ core, compile
-the web assets and create `out/portable/JoyShockMapper.exe`.
+Run `build-portable.ps1` from PowerShell to build the static C++ core and web
+assets, then overwrite the repository-root `JoyShockMapper.exe`. The script
+also creates `out/portable/JoyShockMapper.exe` for CI and release packaging.
 
 Planned order:
 

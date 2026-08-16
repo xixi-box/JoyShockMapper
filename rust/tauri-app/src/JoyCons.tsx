@@ -15,6 +15,8 @@ function RoundButton({ x, y, text }: { x: number; y: number; text: string }) {
 }
 
 export function JoyCons({ leftConnected = false, rightConnected = false }: Props) {
+  const leftX = rightConnected ? 102 : 185;
+  const rightX = leftConnected ? 268 : 185;
   return <svg className="joycons" viewBox="0 0 520 520" role="img" aria-label="左右 Joy-Con">
     <defs>
       <linearGradient id="leftShell" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#3ddcff"/><stop offset=".48" stopColor="#19bfe5"/><stop offset="1" stopColor="#0788aa"/></linearGradient>
@@ -25,7 +27,7 @@ export function JoyCons({ leftConnected = false, rightConnected = false }: Props
     </defs>
     <ellipse cx="260" cy="468" rx="152" ry="24" fill="#22c8ec" opacity=".12" filter="url(#softGlow)"/>
 
-    <g transform="translate(102 28)" filter="url(#joyShadow)">
+    {leftConnected && <g className="leftJoyCon" transform={`translate(${leftX} 28)`} filter="url(#joyShadow)">
       <path d="M84 0h66v452H77C31 452 0 416 0 369V85C0 38 36 0 84 0Z" fill="url(#leftShell)" stroke="#72e8ff" strokeOpacity=".4" strokeWidth="2"/>
       <path d="M82 0h68v20H82C45 20 22 49 22 86v278c0 38 25 68 61 68h67v20H77C31 452 0 416 0 369V85C0 38 36 0 82 0Z" fill="#fff" opacity=".07"/>
       <rect x="137" y="13" width="13" height="426" fill="url(#rail)"/><path d="M136 31v387" stroke="#7d898f" strokeWidth="1"/><circle cx="143" cy="45" r="2.5" fill="#929ca1"/><circle cx="143" cy="406" r="2.5" fill="#929ca1"/>
@@ -36,10 +38,9 @@ export function JoyCons({ leftConnected = false, rightConnected = false }: Props
       <RoundButton x={70} y={230} text="▲"/><RoundButton x={103} y={263} text="▶"/><RoundButton x={70} y={296} text="▼"/><RoundButton x={37} y={263} text="◀"/>
       <g transform="translate(70 374)"><rect x="-13" y="-13" width="26" height="26" rx="3" fill="#12181c" stroke="#5e6970"/><circle r="6" fill="#4b565c"/></g>
       <g fill="#11171b">{[0,1,2,3].map(i=><rect key={i} x="108" y={356+i*17} width="13" height="5" rx="2.5"/>)}</g>
-      {!leftConnected && <path d="M84 0h66v452H77C31 452 0 416 0 369V85C0 38 36 0 84 0Z" className="offline realistic"/>}
-    </g>
+    </g>}
 
-    <g transform="translate(268 28)" filter="url(#joyShadow)">
+    {rightConnected && <g className="rightJoyCon" transform={`translate(${rightX} 28)`} filter="url(#joyShadow)">
       <path d="M0 0h66c48 0 84 38 84 85v284c0 47-31 83-77 83H0Z" fill="url(#rightShell)" stroke="#ff918c" strokeOpacity=".4" strokeWidth="2"/>
       <path d="M0 0h68c37 0 60 22 72 53-17-23-38-33-67-33H0Z" fill="#fff" opacity=".08"/>
       <rect width="13" height="426" x="0" y="13" fill="url(#rail)"/><path d="M14 31v387" stroke="#7d898f" strokeWidth="1"/><circle cx="7" cy="45" r="2.5" fill="#929ca1"/><circle cx="7" cy="406" r="2.5" fill="#929ca1"/>
@@ -50,8 +51,6 @@ export function JoyCons({ leftConnected = false, rightConnected = false }: Props
       <Stick x={80} y={275}/>
       <g transform="translate(80 374)"><circle r="15" fill="#12181c" stroke="#5e6970"/><circle r="10" fill="#252d32"/><path d="m-6 1 6-6 6 6v7H-6Z" fill="#77838a"/></g>
       <g fill="#11171b">{[0,1,2,3].map(i=><rect key={i} x="29" y={356+i*17} width="13" height="5" rx="2.5"/>)}</g>
-      {!rightConnected && <path d="M0 0h66c48 0 84 38 84 85v284c0 47-31 83-77 83H0Z" className="offline realistic"/>}
-    </g>
-    <g className="connectionLegend"><circle cx="260" cy="498" r="4"/><text x="272" y="502">等待左右 Joy-Con 连接</text></g>
+    </g>}
   </svg>;
 }

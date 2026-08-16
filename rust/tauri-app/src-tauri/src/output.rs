@@ -21,8 +21,8 @@ enum PlannedOutput {
 fn virtual_key(name: &str) -> Option<u16> {
     let upper = name.to_ascii_uppercase();
     match upper.as_str() {
-        "CTRL" | "CONTROL" | "LCTRL" => Some(0xA2),
-        "RCTRL" => Some(0xA3),
+        "CTRL" | "CONTROL" | "LCTRL" | "LCONTROL" => Some(0xA2),
+        "RCTRL" | "RCONTROL" => Some(0xA3),
         "SHIFT" | "LSHIFT" => Some(0xA0),
         "RSHIFT" => Some(0xA1),
         "ALT" | "LALT" => Some(0xA4),
@@ -92,6 +92,16 @@ pub fn execute_command(command: &str) -> Result<(), String> {
         PlannedOutput::KeyUp(vk) => keyboard_input(vk, true),
     }).collect::<Vec<_>>();
     send(&inputs)
+}
+
+pub fn execute_sequence(commands: &[&str]) -> Result<(), String> {
+    for (index, command) in commands.iter().enumerate() {
+        execute_command(command)?;
+        if index + 1 < commands.len() {
+            std::thread::sleep(std::time::Duration::from_millis(35));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

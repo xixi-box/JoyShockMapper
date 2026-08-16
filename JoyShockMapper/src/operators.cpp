@@ -40,12 +40,7 @@ istream &operator>>(istream &in, ButtonID &rhv)
 
 ostream &operator<<(ostream &out, const ButtonID &rhv)
 {
-	if (rhv == ButtonID::PLUS)
-		out << "+";
-	else if (rhv == ButtonID::MINUS)
-		out << "-";
-	else
-		out << magic_enum::enum_name(rhv);
+	out << magic_enum::enum_name(rhv);
 	return out;
 }
 

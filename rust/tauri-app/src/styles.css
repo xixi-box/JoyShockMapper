@@ -49,3 +49,103 @@
 .curvePlot .curvePivot{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed #00b3e6;opacity:.7;pointer-events:none}
 .curveLegend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;color:#6a6a6a;font-size:9px;font-family:ui-monospace,"SF Mono",Consolas,monospace}
 .curveLegend span{white-space:nowrap}
+
+/* Toggle with visible on/off label (white theme) */
+.toggleWrap{display:inline-flex;align-items:center;gap:10px}
+.toggleLabel{min-width:44px;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;text-align:center;transition:.2s}
+.toggleWrap:not(.on) .toggleLabel{background:#f0f1f3;color:#8a8a8a;border:1px solid #e3e5e8}
+.toggleWrap.on .toggleLabel{background:#e60012;color:#fff;border:1px solid #c4000e}
+.toggle{width:49px;height:27px;padding:3px;border:0;border-radius:20px;background:#e3e5e8;cursor:pointer;transition:.2s}
+.toggle i{display:block;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.2s}
+.toggle:hover{border:1px solid #c9ccd1}
+.toggle.on{background:#e60012}
+.toggle.on i{transform:translateX(22px);background:#ff4d4d;box-shadow:0 0 12px #e60012}
+
+/* Button test page */
+.testPanel{max-width:960px}
+.testSides{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+.testSide{padding:16px;border:1px solid #e3e5e8;border-radius:14px;background:#fafafa}
+.testSideHead{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e3e5e8}
+.testSideDot{width:10px;height:10px;border-radius:50%}
+.testSideHead b{font-size:13px;font-weight:800;color:#1a1a1a}
+.testSideHead span:last-child{margin-left:auto;color:#6a6a6a;font-size:11px}
+.testGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.testKey{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border:1px solid #e3e5e8;border-radius:10px;background:#fff;transition:.15s}
+.testKey.on{border-color:#e60012;background:#fff5f3;box-shadow:0 2px 10px rgba(230,0,18,.15)}
+.testKeyDot{width:12px;height:12px;border-radius:50%;transition:.15s}
+.testKey.on .testKeyDot{box-shadow:0 0 8px currentColor}
+.testKey b{font-size:11px;color:#4a4a4a}
+.testKey.on b{color:#e60012;font-weight:800}
+.testRaw{margin-top:14px;padding:10px 12px;border:1px solid #e3e5e8;border-radius:10px;background:#fafafa;display:flex;align-items:center;gap:12px}
+.testRaw small{color:#6a6a6a;font-size:10px}
+.testRaw code{color:#e60012;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+
+/* Trigger pressure bar in button test */
+.testTrigger{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 10px;border:1px solid #e3e5e8;border-radius:10px;background:#fff}
+.testTrigger>span{width:26px;font-size:12px;font-weight:800;color:#4a4a4a}
+.triggerBar{flex:1;height:12px;border-radius:6px;background:#f0f1f3;overflow:hidden}
+.triggerBar i{display:block;height:100%;border-radius:6px;transition:width .05s linear}
+.testTrigger b{width:38px;text-align:right;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#8a8a8a}
+.testTrigger b.on{color:#e60012;font-weight:800}
+
+/* Gyro scope: degree marks on the crosshair */
+.scopeMark{position:absolute;color:#405962;font-family:ui-monospace,Consolas,monospace;font-size:7px}
+.scopeMark.n{top:2px;left:50%;transform:translateX(-50%)}
+.scopeMark.s{bottom:2px;left:50%;transform:translateX(-50%)}
+.scopeMark.w{left:2px;top:50%;transform:translateY(-50%)}
+.scopeMark.e{right:2px;top:50%;transform:translateY(-50%)}
+
+/* Gyro readout: bigger input meters + mouse output tiles */
+.gyroReadout{min-width:0}
+.gyroReadout>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.gyroReadout>div>span{padding:10px 8px;border:1px solid #e3e5e8;border-radius:10px;background:#fafafa}
+.gyroReadout span.readoutMain strong{color:#e60012;font-size:18px}
+.gyroReadout span.readoutMain em{font-style:normal;font-size:10px;color:#8a8a8a;font-weight:600}
+.gyroReadout span.readoutOut strong{color:#1a1a1a;font-size:14px}
+.gyroReadout .readoutMain small{display:block;color:#4a4a4a;font-size:10px;font-weight:800}
+
+/* Horizontal input bar (left/right magnitude) */
+.scopeBar{margin-top:10px;height:10px;border-radius:5px;background:#f0f1f3;overflow:hidden;position:relative}
+.scopeBarInner{position:absolute;inset:0}
+.scopeBarInner span{display:block;height:100%;border-radius:5px;transition:width .05s linear}
+.scopeBarMid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#c9ccd1}
+
+/* Sensitivity curve: zones, guide line, working bubble, axis */
+.curvePlot .curveFill{pointer-events:none}
+.curvePlot .curveGuide{stroke:#e60012;stroke-width:.5;stroke-dasharray:2 2;opacity:.5;pointer-events:none}
+.curveZone{position:absolute;top:0;bottom:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.curveZone b{font-size:9px;font-weight:800;color:#fff;padding:2px 8px;border-radius:8px}
+.curveZone.z1{left:0;background:rgba(0,200,240,.07);border-right:1.5px dashed #00b3e6}
+.curveZone.z1 b{background:#00b3e6}
+.curveZone.z2{right:0;background:rgba(230,0,18,.07)}
+.curveZone.z2 b{background:#e60012}
+.curveWorkingBubble{position:absolute;transform:translate(-50%,-50%);padding:5px 8px;border-radius:8px;background:#1a1a1a;color:#fff;white-space:nowrap;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:5}
+.curveWorkingBubble b{display:block;font-size:10px;color:#ffd500}
+.curveWorkingBubble span{font-size:9px;color:#fff}
+.curveAxis{display:flex;justify-content:space-between;margin-top:6px;color:#8a8a8a;font-family:ui-monospace,Consolas,monospace;font-size:9px}
+
+.gyroReadout span.readoutOut strong{color:#4a4a4a;font-size:13px;font-weight:700}
+.gyroReadout .readoutMain small{display:block;margin-bottom:4px;color:#6a6a6a;font-size:10px;font-weight:800;letter-spacing:.3px}
+.gyroReadout .readoutOut small{display:block;margin-bottom:4px;color:#8a8a8a;font-size:9px;font-weight:700}
+
+/* Widen the scope and let the 4 readout tiles breathe */
+.gyroMonitor{grid-template-columns:210px 1fr}
+.gyroScope{width:200px;height:150px}
+.gyroScope .scopeTrail polyline{stroke-width:1.6}
+.gyroScope>i{width:12px;height:12px;margin:-6px}
+
+/* Live feel preview: a cursor that moves with the real gyro mouse output */
+.feelPreview{margin-top:14px;padding:14px 16px;border:1px solid #e3e5e8;border-radius:12px;background:#fff}
+.feelHead{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.feelHead span{color:#1a1a1a;font-size:11px;font-weight:800}
+.feelHead small{color:#8a8a8a;font-size:9px}
+.feelPad{position:relative;height:150px;margin-top:10px;border:1px solid #e3e5e8;border-radius:8px;background:linear-gradient(#f0f1f3 1px,transparent 1px),linear-gradient(90deg,#f0f1f3 1px,transparent 1px),#fafafa;background-size:10% 10%;overflow:hidden}
+.feelPad::before,.feelPad::after{content:"";position:absolute;background:#e3e5e8}
+.feelPad::before{left:50%;top:0;bottom:0;width:1px}
+.feelPad::after{top:50%;left:0;right:0;height:1px}
+.feelCursor{position:absolute;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid #e60012;border-radius:50%;box-shadow:0 0 0 2px #fff,0 0 12px rgba(230,0,18,.4);pointer-events:none;transition:left .05s linear,top .05s linear}
+.feelReadout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.feelReadout>span{padding:10px 8px;border:1px solid #e3e5e8;border-radius:10px;background:#fafafa;text-align:center}
+.feelReadout small{display:block;color:#6a6a6a;font-size:9px;font-weight:700}
+.feelReadout strong{display:block;margin-top:4px;color:#e60012;font-size:16px}
+.feelReadout em{font-style:normal;font-size:10px;color:#8a8a8a}

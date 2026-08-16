@@ -36,9 +36,29 @@ Windows x64 with Visual Studio 2022 C++、CMake、Ninja、Node.js and Rust:
 .\rust\build-portable.ps1
 ```
 
-The resulting file is `out/portable/JoyShockMapper.exe`.
+The user-facing executable is written to `JoyShockMapper.exe` in the repository root. A release copy is also written to `out/portable/JoyShockMapper.exe` for CI and packaging.
 
-生成的成品位于 `out/portable/JoyShockMapper.exe`，用户只需启动这一个文件。
+每次成功构建都会覆盖仓库根目录的 `JoyShockMapper.exe`；同时在 `out/portable/JoyShockMapper.exe` 生成用于 CI 和发行打包的副本。用户只需启动根目录这一个文件。
+
+DJI Mic 的只读状态解析参考了 BSD-2-Clause 项目
+[`usokawa/dji-mic-mo`](https://github.com/usokawa/dji-mic-mo)。完整许可见
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
+DJI Mic 状态监视仅匹配 `VID 2CA3 / PID 4011`，只 claim 已绑定 WinUSB
+的 Interface 6，并从 IN Endpoint `0x86` 读取周期状态包。设置修改也严格限制在
+原协议有明确命令、取值编码且当前设备型号匹配的白名单字段，通过 OUT Endpoint
+`0x06` 发送；界面不会先行伪造新值，而会等待设备状态包回读确认。代码不会设置
+configuration、切换 alt setting、分离驱动或访问 MI_00/MI_01，因此 Windows 的
+`Wireless Mic Rx` 音频输入保持不变。设备
+插拔、TX1 断连/重连和接口临时被其他程序占用时都会自动重试。
+
+首页右侧会显示原创绘制的 DJI Mic 接收器/TX 示意图，以及接收器、TX1 电量、充电、
+输入电平和连接状态；“完整设备信息”中还会展示协议实际读取到的固件、设备名称、
+录制状态、增益、音色、降噪、低切等真实字段。未收到或不适用于当前型号的字段不会
+凭空补值；可写且型号匹配的字段显示控件，其余字段只读。
+如果刚把 Interface 6 切换为 WinUSB，设备管理器可能已显示 `OK`，但 Windows 仍会
+把设备标记为“等待重启以完成之前的操作”；此时请重启 Windows，应用无需更改权限，
+下次启动会自动重新连接。
 
 The Windows build statically links the C++ engine, SDL3 and ViGEm client library. WebView2 is a Windows runtime component; ViGEm Bus is still required only when Xbox/DS4 virtual-controller output is enabled because it is a system driver rather than an application DLL.
 
@@ -48,9 +68,11 @@ Device mapping profiles are stored under `%LOCALAPPDATA%\JoyShockMapper\devices`
 
 设备映射自动保存在 `%LOCALAPPDATA%\JoyShockMapper\devices`。SDL 能提供序列号时会据此区分设备；没有序列号时，同型号 Joy-Con 按左、右侧分别共享配置。这些文件属于用户数据而非运行依赖，因此软件仍以单个 EXE 分发。
 
-左侧“设置”页提供“最小化到系统托盘”和“开机自动启动”。托盘模式下映射与陀螺仪会继续在后台运行，单击托盘图标即可恢复窗口；开机启动使用当前 Windows 用户的启动项，不需要管理员权限。
+左侧“设置”页提供“最小化到系统托盘”和“开机自动启动”。托盘模式下映射与陀螺仪会继续在后台运行，单击托盘图标即可恢复窗口；开机启动使用当前 Windows 用户的启动项，不需要管理员权限，并以后台模式启动，不弹出主窗口。
 
-基础陀螺仪采用“按住启用”逻辑，默认按住 `ZL` 才会将手柄转动转换为鼠标移动，也可以在陀螺仪页面改成其他常用按键。实时映射、SDL 设备轮询和成熟陀螺仪行为由同进程内静态链接的 C++ 核心负责；Rust 负责界面、设置、托盘与持久化。
+基础陀螺仪采用“按住启用”逻辑，默认按住 `ZL` 才会将手柄转动转换为鼠标移动，也可以在陀螺仪页面改成其他常用按键。页面只保留精细移动灵敏度、快速移动灵敏度、加速生效速度和低速平滑范围四项常用调节，它们直接对应 JoyShockMapper 原生参数。实时映射、SDL 设备轮询和成熟陀螺仪行为由同进程内静态链接的 C++ 核心负责；Rust 负责界面、设置、托盘与持久化。
+
+首页映射框右侧的菱形按钮提供特殊功能，包括复制或剪切当前输入框的全部文字、粘贴、系统截图，以及打开指定软件后用 `Ctrl+L`、`Ctrl+F` 或 `Tab` 定位输入控件。普通按键仍由 C++ 实时执行；需要等待的软件动作由 Rust 后台工作线程执行，不阻塞手柄轮询。
 
 For stable upstream releases and the complete command reference, continue with the original documentation below. GUI work is maintained in the community fork: [xixi-box/JoyShockMapper](https://github.com/xixi-box/JoyShockMapper).
 

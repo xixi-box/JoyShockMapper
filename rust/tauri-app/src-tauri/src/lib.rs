@@ -16,8 +16,6 @@ mod embedded_core;
 mod dji_mic;
 #[cfg(windows)]
 mod special_actions;
-#[cfg(windows)]
-mod key_capture;
 
 struct SettingsState(Mutex<UiSettings>);
 struct InputEngineState(Mutex<InputEngine>);
@@ -55,6 +53,12 @@ fn get_gyro_debug_status(core: State<'_, embedded_core::EmbeddedCore>) -> embedd
 
 #[cfg(windows)]
 #[tauri::command]
+fn get_button_states(core: State<'_, embedded_core::EmbeddedCore>) -> embedded_core::ButtonStates {
+    core.button_states()
+}
+
+#[cfg(windows)]
+#[tauri::command]
 fn calibrate_gyro(core: State<'_, embedded_core::EmbeddedCore>) -> Result<(), String> {
     core.command("RESTART_GYRO_CALIBRATION")?;
     std::thread::sleep(std::time::Duration::from_secs(4));
@@ -65,18 +69,6 @@ fn calibrate_gyro(core: State<'_, embedded_core::EmbeddedCore>) -> Result<(), St
 #[tauri::command]
 fn create_launch_focus_action(path: String, shortcut: String) -> Result<String, String> {
     special_actions::launch_focus_command(path.trim(), &shortcut)
-}
-
-#[cfg(windows)]
-#[tauri::command]
-fn start_key_capture(app: tauri::AppHandle) -> Result<(), String> {
-    key_capture::start(app)
-}
-
-#[cfg(windows)]
-#[tauri::command]
-fn stop_key_capture() {
-    key_capture::stop()
 }
 
 #[cfg(windows)]
@@ -284,6 +276,14 @@ fn preview_tick(state: State<'_, InputEngineState>, now_ms: u64) -> Result<Vec<T
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+	#[cfg(windows)]
+	{
+		// Single-instance guard: a second launch would otherwise show a
+		// duplicate tray icon and fight the first process for the controllers.
+		if !acquire_single_instance() {
+			std::process::exit(0);
+		}
+	}
 	let background_start = std::env::args_os().any(|argument| argument == "--background");
 	let quit_requested = Arc::new(AtomicBool::new(false));
 	let tray_quit_requested = quit_requested.clone();
@@ -388,10 +388,10 @@ pub fn run() {
 			, get_core_status, reconnect_controllers
 			, configure_fly_mouse
 			, get_gyro_debug_status, calibrate_gyro
+			, get_button_states
 			, create_launch_focus_action
 			, get_dji_mic_status
 			, set_dji_mic_setting
-			, start_key_capture, stop_key_capture
         ])
 		.build(tauri::generate_context!())
 		.expect("failed to build JoyShockMapper Tauri shell");
@@ -415,4 +415,27 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+#[cfg(windows)]
+fn acquire_single_instance() -> bool {
+    use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+    static MUTEX_HANDLE: std::sync::OnceLock<isize> = std::sync::OnceLock::new();
+    // Keep the handle alive for the lifetime of the process so the named mutex
+    // is not released (which would let a second instance start).
+    let wide_name = encode_wide("JoyShockMapper_GlobalSingleInstance");
+    let handle = unsafe {
+        CreateMutexW(std::ptr::null(), 0, wide_name.as_ptr())
+    };
+    if handle.is_null() {
+        return true; // Failed to create the guard; allow startup rather than block it.
+    }
+    let _ = MUTEX_HANDLE.set(handle as isize);
+    unsafe { GetLastError() != ERROR_ALREADY_EXISTS }
+}
+
+#[cfg(windows)]
+fn encode_wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
