@@ -2,7 +2,7 @@
 # JoyShockMapper site: single static nginx image, context=site/,
 # replaces the manual docker-run container (port 8081->80).
 # deploy site updates: run with deploy_ref=gui-rework when needed.
-name: Build and Deploy (JoyShock)
+name: Build and Deploy (JoyShock v2)
 
 on:
   workflow_dispatch:
