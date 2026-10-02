@@ -1,0 +1,15 @@
+# JoyShockMapper 官网生产服务定义(由 deploy-template.yml 部署模板读取)
+services:
+  app:
+    image: ${IMAGE_APP}
+    container_name: joy-shock-mapper-site
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    # 镜像内建 HEALTHCHECK 用 localhost 在本容器恒失败,覆盖为 127.0.0.1
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -T 5 --spider http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
